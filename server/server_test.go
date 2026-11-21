@@ -20,7 +20,7 @@ func newTestApp(t *testing.T) (*App, *httptest.Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{TrustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}}
+	cfg := Config{TrustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}, IPHeaders: []string{"CF-Connecting-IP", "X-Real-IP"}}
 	a := newApp(cfg, db)
 	srv := httptest.NewServer(a.routes())
 	t.Cleanup(func() { a.hub.shutdown(); srv.Close(); db.Close() })
@@ -97,7 +97,7 @@ func TestLimiter(t *testing.T) {
 }
 
 func TestClientIP(t *testing.T) {
-	a := &App{cfg: Config{TrustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}}}
+	a := &App{cfg: Config{TrustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}, IPHeaders: []string{"CF-Connecting-IP", "X-Real-IP"}}}
 	r := httptest.NewRequest("GET", "/", nil)
 	r.Header.Set("CF-Connecting-IP", "203.0.113.7")
 	r.RemoteAddr = "127.0.0.1:5000"

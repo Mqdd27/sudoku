@@ -78,6 +78,19 @@ deploy/            systemd unit, nginx site, backup + deploy scripts, optional D
 
 The board never reads a solution. It asks a `GameSource` to check cells, give hints and judge a finished board. In Story and PvP the source is the server, so the client never receives the answer.
 
+## Deploying to Fly.io
+
+`fly.toml` runs everything on one Fly machine: the Go server with the web app embedded, SQLite on a 1 GB volume.
+
+```sh
+fly auth login
+fly apps create <name>            # then set app = "<name>" in fly.toml
+fly volumes create sudoku_data --region sin --size 1
+fly deploy --ha=false             # one machine: matches live in memory, SQLite is one file
+```
+
+The app is then at `https://<name>.fly.dev`. For your own domain: `fly certs add sudoku.example.com` and point the DNS record it prints at Fly.
+
 ## Deploying to a server
 
 The intended setup is Ubuntu with nginx in front, Cloudflare for DNS/TLS, and systemd running the binary.

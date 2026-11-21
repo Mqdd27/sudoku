@@ -133,9 +133,9 @@ func TestTATieBreakers(t *testing.T) {
 		want   int
 		reason string
 	}{
-		{taScore{3, 10, 9}, taScore{2, 30, 0}, 1, "boxes"},    // boxes beat everything
-		{taScore{0, 5, 4}, taScore{0, 7, 0}, -1, "cells"},     // no boxes at all: correct cells decide
-		{taScore{2, 12, 1}, taScore{2, 11, 0}, 1, "cells"},    // same boxes: cells
+		{taScore{3, 10, 9}, taScore{2, 30, 0}, 1, "boxes"},     // boxes beat everything
+		{taScore{0, 5, 4}, taScore{0, 7, 0}, -1, "cells"},      // no boxes at all: correct cells decide
+		{taScore{2, 12, 1}, taScore{2, 11, 0}, 1, "cells"},     // same boxes: cells
 		{taScore{2, 12, 3}, taScore{2, 12, 1}, -1, "mistakes"}, // same boxes and cells: fewer mistakes
 		{taScore{1, 6, 2}, taScore{1, 6, 2}, 0, "draw"},
 		{taScore{0, 0, 0}, taScore{0, 0, 0}, 0, "draw"},

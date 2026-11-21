@@ -121,11 +121,11 @@ type inMsg struct {
 	Mode    string `json:"mode"`
 	Minutes int    `json:"minutes"`
 	Size    int    `json:"size"`
-	Level  string `json:"level"`
-	Code   string `json:"code"`
-	Cell   int    `json:"cell"`
-	Value  int    `json:"value"`
-	Values []int  `json:"values"`
+	Level   string `json:"level"`
+	Code    string `json:"code"`
+	Cell    int    `json:"cell"`
+	Value   int    `json:"value"`
+	Values  []int  `json:"values"`
 }
 
 type M map[string]any

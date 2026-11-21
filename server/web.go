@@ -87,7 +87,7 @@ func (a *App) clientIP(r *http.Request) string {
 	}
 	for _, p := range a.cfg.TrustedProxies {
 		if p.Contains(peer.Unmap()) {
-			for _, h := range []string{"CF-Connecting-IP", "X-Real-IP"} {
+			for _, h := range a.cfg.IPHeaders {
 				if ip, err := netip.ParseAddr(strings.TrimSpace(r.Header.Get(h))); err == nil {
 					return ip.String()
 				}

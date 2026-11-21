@@ -1,0 +1,35 @@
+# Fly.io: one machine runs the Go server with the web app embedded; SQLite lives on a volume.
+# Note: keep exactly one machine. Matches are held in memory and SQLite is a single file.
+app = "sudoku-mqdd"
+primary_region = "sin"
+
+[build]
+  dockerfile = "deploy/Dockerfile"
+
+[env]
+  PORT = "8080"
+  BIND_ADDR = "0.0.0.0"
+  DB_PATH = "/data/sudoku.db"
+  # Only Fly's proxy can reach the machine, and it always sets Fly-Client-IP itself.
+  TRUSTED_PROXIES = "0.0.0.0/0,::/0"
+  IP_HEADERS = "Fly-Client-IP"
+
+[[mounts]]
+  source = "sudoku_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off" # a stopped machine would drop live PvP matches
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 800
+    hard_limit = 1000
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

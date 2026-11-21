@@ -27,6 +27,8 @@ type Config struct {
 	CookieSecure   bool
 	AllowedOrigins []string
 	TrustedProxies []netip.Prefix
+	BindAddr       string   // 127.0.0.1 behind nginx; 0.0.0.0 inside a container (Fly.io)
+	IPHeaders      []string // headers a trusted proxy puts the client IP in
 	ServeWeb       bool
 }
 
@@ -129,6 +131,12 @@ func loadConfig() (Config, error) {
 			c.AllowedOrigins = append(c.AllowedOrigins, o)
 		}
 	}
+	c.BindAddr = env("BIND_ADDR", "127.0.0.1")
+	for _, h := range strings.Split(env("IP_HEADERS", "CF-Connecting-IP,X-Real-IP"), ",") {
+		if h = strings.TrimSpace(h); h != "" {
+			c.IPHeaders = append(c.IPHeaders, h)
+		}
+	}
 	for _, p := range strings.Split(env("TRUSTED_PROXIES", "127.0.0.1/32,::1/128"), ",") {
 		pfx, err := netip.ParsePrefix(strings.TrimSpace(p))
 		if err != nil {
@@ -164,7 +172,7 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    16 << 10,
 	}
-	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.Port))) // loopback only: nginx fronts it
+	ln, err := net.Listen("tcp", net.JoinHostPort(cfg.BindAddr, strconv.Itoa(cfg.Port))) // loopback by default: nginx fronts it
 	if err != nil {
 		log.Fatal(err)
 	}

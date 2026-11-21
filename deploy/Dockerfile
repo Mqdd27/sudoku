@@ -20,5 +20,5 @@ FROM scratch
 COPY --from=go /sudoku-server /sudoku-server
 ENV DB_PATH=/data/sudoku.db
 VOLUME /data
-# Note: the server binds 127.0.0.1 only, so run with --network host (or put nginx in the same network namespace).
+# Note: binds 127.0.0.1 unless BIND_ADDR is set (fly.toml sets 0.0.0.0); without it run with --network host.
 ENTRYPOINT ["/sudoku-server", "-web"]
