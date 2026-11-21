@@ -1,5 +1,5 @@
 // Tiny DOM helpers shared by the pages.
-import { onShow } from './board'
+import { move, onShow } from './board'
 
 export const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T
 
@@ -14,6 +14,7 @@ export function showPage(html: string) {
   page.hidden = false
   game.hidden = true
   onShow()
+  move(page, { opacity: 0, transform: 'translateY(10px)' }, 260)
   page.querySelector<HTMLElement>('h1')?.focus?.()
   scrollTo(0, 0)
 }
@@ -24,6 +25,7 @@ export function showGame(bar: string, info: string) {
   page.hidden = true
   game.hidden = false
   onShow()
+  move(game, { opacity: 0, transform: 'scale(.985)' }, 280)
 }
 
 const winDlg = $<HTMLDialogElement>('win')

@@ -5,6 +5,40 @@ import { erase, isFull, setValue, toggleNote, undo, type CheckMode, type Game } 
 import type { GameSource } from './source'
 import { load, store } from './storage'
 
+// ---------- motion ----------
+// Note: motion only reports what happened (digit placed, wrong, line finished, solved). Reduced motion keeps fades and colour, drops movement.
+const calm = matchMedia('(prefers-reduced-motion: reduce)')
+const EASE = 'cubic-bezier(.16,1,.3,1)'
+
+/** Animate `el` from `from` to its normal look. With reduced motion only opacity is kept. */
+export function move(el: Element | null | undefined, from: Keyframe, ms = 220, delay = 0) {
+  if (!el) return
+  if (calm.matches) { if (from.opacity === undefined) return; from = { opacity: from.opacity } }
+  el.animate([from, {}], { duration: ms, delay, easing: EASE })
+}
+
+/** Light up `list` cell by cell, outwards from `from`. `lift` also bumps the digits (board solved). */
+function sweep(list: number[], from: number, lift = false) {
+  const n = shape.size, glow = getComputedStyle(board).getPropertyValue('--done'), r0 = (from / n) | 0, c0 = from % n
+  for (const i of list) {
+    const delay = Math.max(Math.abs(((i / n) | 0) - r0), Math.abs((i % n) - c0)) * 45
+    cells[i].animate([{ backgroundColor: glow }, {}], { duration: 650, delay, easing: 'ease-out' })
+    if (lift && !calm.matches) cells[i].firstElementChild?.animate(
+      [{}, { transform: 'translateY(-18%) scale(1.2)', offset: 0.4 }, {}], { duration: 500, delay, easing: EASE })
+  }
+}
+
+/** Rows, columns and boxes through cell i that just became full with no wrong digit. */
+function finishedUnits(g: Game, i: number) {
+  const n = shape.size, { box } = geo(shape)
+  const bad = new Set([...conflicts(g.values, shape), ...g.wrong])
+  const units = [(j: number) => ((j / n) | 0) === ((i / n) | 0), (j: number) => j % n === i % n, (j: number) => box[j] === box[i]]
+  return units.flatMap((inUnit) => {
+    const u = cells.map((_, j) => j).filter(inUnit)
+    return u.every((j) => g.values[j] && !bad.has(j)) ? u : []
+  })
+}
+
 export interface Settings { check: CheckMode; theme: 'auto' | 'light' | 'dark'; size?: number; level?: string }
 export const settings = load<Settings>('settings', { check: 'rules', theme: 'auto' })
 export const saveSettings = () => store('settings', settings)
@@ -20,7 +54,7 @@ export interface Play {
 }
 
 /** Server-driven cell states (Time Attack). The owner edits the sets and calls paint(). */
-export const marks = { locked: new Set<number>(), cooling: new Set<number>(), boxes: new Set<number>(), fresh: -1 }
+export const marks = { locked: new Set<number>(), cooling: new Set<number>(), boxes: new Set<number>() }
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T
 export const fmt = (s: number) => {
@@ -74,7 +108,7 @@ export function mount(p: Play) {
   keys = new Array(cells.length).fill('')
   sel = -1
   paused = false
-  marks.locked.clear(); marks.cooling.clear(); marks.boxes.clear(); marks.fresh = -1
+  marks.locked.clear(); marks.cooling.clear(); marks.boxes.clear()
   if (p.timed) app.dataset.mode = 'timed'
   else delete app.dataset.mode
   $('undo').hidden = !!p.timed
@@ -119,11 +153,13 @@ export function paint() {
     counts[v]++
     const key = v ? 'v' + v : 'n' + m
     if (key !== keys[i]) {
+      const fresh = keys[i] !== '' && v
       keys[i] = key
-      c.innerHTML = v ? String(v)
+      c.innerHTML = v ? `<span>${v}</span>`
         : m ? '<div class="notes">' + Array.from({ length: n }, (_, k) => `<span>${m & (1 << (k + 1)) ? k + 1 : ''}</span>`).join('') + '</div>'
         : ''
       c.setAttribute('aria-label', `Row ${((i / n) | 0) + 1}, column ${(i % n) + 1}, ${v || 'empty'}`)
+      if (fresh) move(c.firstElementChild, { transform: 'scale(.4)', opacity: 0 }, 200)
     }
     let cls = 'c'
     if (g.puzzle[i]) cls += ' given'
@@ -133,8 +169,12 @@ export function paint() {
     if (i === sel) cls += ' sel'
     if (marks.locked.has(i)) cls += ' lock'
     if (marks.cooling.has(i)) cls += ' cool'
-    if (marks.boxes.has(box[i])) cls += box[i] === marks.fresh ? ' boxdone boxnew' : ' boxdone'
-    if (c.className !== cls) c.className = cls
+    if (marks.boxes.has(box[i])) cls += ' boxdone'
+    if (c.className !== cls) {
+      if (v && cls.includes(' wrong') && !c.className.includes(' wrong') && !calm.matches)
+        c.firstElementChild?.animate([{}, { transform: 'translateX(-14%)' }, { transform: 'translateX(12%)' }, { transform: 'translateX(-6%)' }, {}], { duration: 320 })
+      c.className = cls
+    }
   }
   padBtns.forEach((b, k) => {
     const left = n - counts[k + 1]
@@ -189,11 +229,14 @@ async function verify(i: number, countMistake: boolean) {
 }
 
 /** Board full and rule-clean → let the source decide if it's solved. */
-async function trySubmit() {
+async function trySubmit(from = sel) {
   const p = play!, g = p.game
   if (!isFull(g) || conflicts(g.values, shape).size || g.done) return
   const { solved } = await p.source.submit(g.id, g.values, elapsed())
-  if (solved && play === p && !g.done) { g.done = true; syncTimer(); changed(); p.onWin(g) }
+  if (!solved || play !== p || g.done) return
+  g.done = true; syncTimer(); changed()
+  sweep(cells.map((_, j) => j), Math.max(from, 0), true) // the wave, then the result
+  setTimeout(() => p.onWin(g), calm.matches ? 0 : 750)
 }
 
 async function input(d: number) {
@@ -205,7 +248,8 @@ async function input(d: number) {
   if (!play!.source.strict && settings.check === 'rules' && conflicts(g.values, shape).has(i)) g.mistakes++
   changed()
   await verify(i, true)
-  await trySubmit()
+  if (play?.game === g && g.values[i] === d) sweep(finishedUnits(g, i), i)
+  await trySubmit(i)
 }
 function doErase() { const g = play?.game; if (g && !paused && sel >= 0 && !marks.locked.has(sel) && erase(g, sel)) changed() }
 async function doUndo() {

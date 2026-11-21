@@ -2,7 +2,7 @@
 // the clock and the result; this file only renders what it says.
 import { needLogin } from './account'
 import { me } from './api'
-import { fmt, marks, mount, paint, stop } from './board'
+import { fmt, marks, mount, move, paint, stop } from './board'
 import { LEVELS, PVP, SIZES, sizeInfo, TA, type Level, type Size } from './config'
 import { newGame, type Game } from './logic/game'
 import type { Grid } from './logic/sudoku'
@@ -110,10 +110,8 @@ function onMsg(m: Msg) {
     case 'ta_start': offset = m.serverNow - Date.now(); startTA(m); break
     case 'ta_cell_result': taResult(m); break
     case 'ta_box_done':
-      marks.boxes.add(m.box)
-      marks.fresh = m.box
+      marks.boxes.add(m.box) // the board already lit the box up when the cell was confirmed
       paint()
-      setTimeout(() => { if (marks.fresh === m.box) { marks.fresh = -1; paint() } }, 700)
       break
     case 'ta_score': taScores(m.you, m.opponent); break
     case 'ta_end': taEnd(m); break
@@ -279,7 +277,7 @@ function countdownPage() {
     const s = Math.ceil((startAt - serverNow()) / 1000)
     const el = document.getElementById('p-count')
     if (!el || s <= 0) return clearInterval(countTimer)
-    el.textContent = String(s)
+    if (el.textContent !== String(s)) { el.textContent = String(s); move(el, { transform: 'scale(1.8)', opacity: 0 }, 380) }
   }
   draw()
   countTimer = window.setInterval(draw, 200)
@@ -344,6 +342,7 @@ function startTA(m: Msg) {
   $('p-resign').onclick = async () => {
     if (await dialog('Resign?', '<p>Your opponent wins this match.</p>', ['Resign', 'Keep playing']) === 0) send({ t: 'resign' })
   }
+  $('board').style.setProperty('--cool', TA.cooldownMs + 'ms')
   mount({ game, source: src, onWin: () => {}, timed: true, clock: () => Math.max(0, Math.ceil((endsAt - serverNow()) / 1000)) })
   // after mount (which resets marks): restore what the server says is locked, cooling and finished
   values.forEach((v, i) => { if (v && !m.puzzle[i]) marks.locked.add(i) })
@@ -359,6 +358,7 @@ function taScores(you: Score, opp: Score) {
   const n = room?.size ?? 9, txt = (s: Score) => `${s.boxes}/${n} ▦ · ${s.cells} ✓`
   const me_ = document.getElementById('ta-me'), op = document.getElementById('ta-op')
   if (me_) { me_.textContent = txt(you); me_.title = `${you.boxes} boxes, ${you.cells} correct cells` }
+  if (op && op.textContent && op.textContent !== txt(opp)) move(op, { transform: 'scale(1.25)' }, 260)
   if (op) { op.textContent = txt(opp); op.title = `${opp.boxes} boxes, ${opp.cells} correct cells, ${opp.mistakes} mistakes` }
 }
 
