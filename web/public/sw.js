@@ -16,7 +16,10 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request
-  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return
+  const url = new URL(req.url)
+  if (req.method !== 'GET' || url.origin !== location.origin) return
+  // API and websocket traffic always goes straight to the network, never cached.
+  if (url.pathname.startsWith('/api/') || url.pathname === '/api' || url.pathname === '/ws' || url.pathname.startsWith('/ws/')) return
   if (req.mode === 'navigate') {
     // network first so new deploys show up; offline → cached shell
     e.respondWith(fetch(req).catch(() => caches.match('/')))

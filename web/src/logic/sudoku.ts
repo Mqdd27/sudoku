@@ -94,7 +94,7 @@ export function generate(level: Level, budgetMs = GENERATE_BUDGET_MS): Puzzle {
     if (givens <= max) return p
     if (!best || givens < best.puzzle.filter(Boolean).length) best = p
   } while (Date.now() < deadline)
-  return best! // ponytail: may have a few givens above max if the budget runs out; still unique
+  return best! // Note: may have a few givens above max if the budget runs out; still unique
 }
 
 /** Indices of filled cells that duplicate a peer's value. */

@@ -1,20 +1,17 @@
-import { LEVELS, WORKER_TIMEOUT_MS, type Level } from './config'
-import { generate, PEERS, type Puzzle } from './logic/sudoku'
-import { erase, hint, newGame, setValue, toggleNote, undo, wrongCells, type CheckMode, type Game } from './logic/game'
+import { LEVELS, type Level } from './config'
+import { conflicts, PEERS } from './logic/sudoku'
+import { erase, isFull, newGame, setValue, toggleNote, undo, type CheckMode, type Game } from './logic/game'
+import { LocalGameSource, type GameSource } from './source'
+import { load, store } from './storage'
 
-// ---------- storage ----------
-const load = <T>(k: string, d: T): T => {
-  try { return JSON.parse(localStorage.getItem(k) ?? 'null') ?? d } catch { return d }
-}
-const store = (k: string, v: unknown) => {
-  try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* private mode / quota: play on without saving */ }
-}
+// The only place that picks a source; a server-backed GameSource drops in here.
+const source: GameSource = new LocalGameSource()
 
 type Stats = Partial<Record<Level, { solved: number; best: number }>>
-const settings = load<{ check: CheckMode; theme: 'auto' | 'light' | 'dark' }>('sudoku.settings', { check: 'rules', theme: 'auto' })
-const stats = load<Stats>('sudoku.stats', {})
-let game: Game | null = load<Game | null>('sudoku.game', null)
-if (!game || game.done || game.values?.length !== 81 || !(game.level in LEVELS)) game = null
+const settings = load<{ check: CheckMode; theme: 'auto' | 'light' | 'dark' }>('settings', { check: 'rules', theme: 'auto' })
+const stats = load<Stats>('stats', {})
+let game: Game | null = load<Game | null>('game', null)
+if (!game || game.done || !game.id || game.values?.length !== 81 || !(game.level in LEVELS)) game = null
 
 let sel = -1
 let notesMode = false
@@ -64,7 +61,7 @@ const showTime = () => {
 function paint() {
   if (!game) return
   const g = game
-  const wrong = wrongCells(g, settings.check)
+  const wrong = settings.check === 'rules' ? conflicts(g.values) : new Set(g.wrong)
   const peers = new Set(sel >= 0 ? PEERS[sel] : [])
   const sv = sel >= 0 ? g.values[sel] : 0
   const counts = new Array(10).fill(0)
@@ -111,36 +108,64 @@ function setPaused(p: boolean) {
   paused = p
   syncTimer()
   paint()
-  if (game) store('sudoku.game', game)
+  if (game) store('game', game)
 }
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) setPaused(true)
   else syncTimer()
 })
-addEventListener('pagehide', () => game && store('sudoku.game', game))
+addEventListener('pagehide', () => game && store('game', game))
 
 // ---------- actions ----------
-function afterMove() {
-  paint()
-  store('sudoku.game', game)
-  if (game?.done) win()
+const save = () => { paint(); store('game', game) }
+
+/** Ask the source whether cell i is right (solution mode only). Ignores stale answers. */
+async function verify(i: number, countMistake: boolean) {
+  const g = game!, v = g.values[i]
+  if (settings.check !== 'solution' || !v || g.puzzle[i]) return
+  const ok = await source.checkCell(g.id, i, v)
+  if (game !== g || g.values[i] !== v || ok) return
+  if (!g.wrong.includes(i)) g.wrong.push(i)
+  if (countMistake) g.mistakes++
+  save()
 }
-function input(d: number) {
+
+/** Board full and rule-clean → let the source decide if it's solved. */
+async function trySubmit() {
+  const g = game!
+  if (!isFull(g) || conflicts(g.values).size) return
+  const { solved } = await source.submit(g.id, g.values, g.elapsed)
+  if (solved && game === g && !g.done) { g.done = true; save(); win() }
+}
+
+async function input(d: number) {
   if (!game || paused || sel < 0) return
-  if (notesMode) toggleNote(game, sel, d)
-  else setValue(game, sel, d, settings.check)
-  afterMove()
+  const i = sel
+  if (notesMode) { if (toggleNote(game, i, d)) save(); return }
+  if (!setValue(game, i, d)) return
+  if (settings.check === 'rules' && conflicts(game.values).has(i)) game.mistakes++
+  save()
+  await verify(i, true)
+  await trySubmit()
 }
-function doErase() { if (game && !paused && sel >= 0) { erase(game, sel); afterMove() } }
-function doUndo() {
+function doErase() { if (game && !paused && sel >= 0 && erase(game, sel)) save() }
+async function doUndo() {
   if (!game || paused) return
   const i = undo(game)
-  if (i >= 0) { sel = i; afterMove() }
+  if (i < 0) return
+  sel = i
+  save()
+  await verify(i, false)
+  await trySubmit()
 }
-function doHint() {
-  if (!game || paused) return
-  const i = hint(game, sel)
-  if (i >= 0) { sel = i; afterMove() }
+async function doHint() {
+  if (!game || paused || game.done) return
+  const g = game
+  const h = await source.getHint(g.id, g.values, sel)
+  if (!h || game !== g) return
+  sel = h.cell
+  if (setValue(g, h.cell, h.value)) save()
+  await trySubmit()
 }
 function toggleNotes() {
   notesMode = !notesMode
@@ -159,44 +184,23 @@ function win() {
   s.solved++
   const record = !s.best || g.elapsed < s.best
   if (record) s.best = g.elapsed
-  store('sudoku.stats', stats)
+  store('stats', stats)
   $('win-text').innerHTML =
     `Level: <b>${LEVELS[g.level].label}</b><br>Time: <b>${fmt(g.elapsed)}</b>${record ? ' (new best!)' : ''}<br>Mistakes: <b>${g.mistakes}</b>`
   winDlg.showModal()
-}
-
-function makePuzzle(level: Level): Promise<Puzzle> {
-  return new Promise((resolve) => {
-    let w: Worker | undefined, settled = false
-    const finish = (p?: Puzzle) => {
-      if (settled) return
-      settled = true
-      clearTimeout(t)
-      w?.terminate()
-      resolve(p ?? generate(level, 1000)) // fallback: inline, short budget
-    }
-    const t = setTimeout(() => finish(), WORKER_TIMEOUT_MS)
-    try {
-      w = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
-      w.onmessage = (e: MessageEvent<Puzzle>) => finish(e.data)
-      w.onerror = () => finish()
-      w.postMessage(level)
-    } catch { finish() }
-  })
 }
 
 async function startNew() {
   if (game && !game.done && game.history.length && !confirm('Abandon the current game?')) return
   newBtn.disabled = true
   newBtn.textContent = 'Generating…'
-  const level = levelSel.value as Level
-  game = newGame(await makePuzzle(level))
+  game = newGame(await source.start(levelSel.value as Level))
   newBtn.disabled = false
   newBtn.textContent = 'New Game'
   sel = -1
   paused = false
   syncTimer()
-  afterMove()
+  save()
 }
 
 // ---------- events ----------
@@ -251,19 +255,27 @@ $('settings-btn').onclick = () => {
 }
 setForm.addEventListener('change', () => {
   const f = new FormData(setForm)
+  const switched = settings.check !== f.get('check')
   settings.check = f.get('check') as CheckMode
   settings.theme = f.get('theme') as typeof settings.theme
-  store('sudoku.settings', settings)
+  store('settings', settings)
   applyTheme()
   paint()
+  // entering solution mode: check what's already on the board (not counted as new mistakes)
+  if (switched && game) for (let i = 0; i < 81; i++) verify(i, false)
 })
 
 // ---------- boot ----------
 applyTheme()
-if (game) {
-  levelSel.value = game.level
-  paint()
-  syncTimer()
-} else startNew()
+;(async () => {
+  if (game && (await source.resume(game.id))) {
+    levelSel.value = game.level
+    save()
+    syncTimer()
+  } else {
+    game = null
+    startNew()
+  }
+})()
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register('/sw.js')

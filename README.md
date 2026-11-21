@@ -1,36 +1,42 @@
 # Sudoku
 
-No-game-over Sudoku. Vanilla TypeScript, no runtime dependencies, static files only. Works offline (PWA).
+Classic 9×9 Sudoku in the browser. Four difficulty levels, notes, hints, undo, light and dark themes. Installable and playable offline.
 
-## Dev
+Built with plain TypeScript, HTML and CSS. No runtime dependencies; the production build is static files only.
+
+## Getting started
 
 ```sh
+cd web
 npm install
 npm run dev        # http://localhost:5173
-npm test           # Vitest: solver, generator (uniqueness + givens per level), game state
-npm run build      # typecheck + build to dist/
-npm run preview    # serve dist/ locally (service worker only runs in the build)
+npm test           # unit tests (Vitest)
+npm run build      # typecheck + production build to web/dist/
+npm run preview    # serve the build locally (the service worker only runs here)
 ```
 
-Difficulty (given-cell ranges) and generator time limits: `src/config.ts`.
+Difficulty ranges (number of pre-filled cells) and generator time limits live in `web/src/config.ts`.
 
-## Layout
+## Project structure
 
 ```
-src/config.ts          levels + timeouts
-src/logic/sudoku.ts    solver (bitmask backtracking), generator, conflict validator
-src/logic/game.ts      game state, mistakes, hint, undo history
-src/worker.ts          runs the generator off the main thread
-src/main.ts            UI: board, input, timer, storage, settings
-src/style.css          mobile-first layout, light/dark themes
-public/sw.js           hand-written service worker (precache list injected at build, see vite.config.ts)
+web/
+  src/config.ts          difficulty levels, timeouts
+  src/logic/sudoku.ts    solver, puzzle generator, conflict check
+  src/logic/game.ts      board state and undo history
+  src/source.ts          GameSource interface and the local implementation
+  src/storage.ts         localStorage schema (keys: sudoku:v1:*)
+  src/worker.ts          puzzle generation off the main thread
+  src/main.ts            UI and input handling
+  src/style.css          layout and themes
+  public/sw.js           service worker (offline cache; /api/* and /ws are never cached)
+  test/fixtures/         puzzle + solution test vectors (plain JSON)
 ```
 
-## Deploy (Vercel)
+The UI never reads a solution directly. It asks a `GameSource` to check cells, give hints and validate a finished board, so a server-backed source can replace `LocalGameSource` in `src/main.ts` without changing the board code.
 
-`vercel.json` already holds the build settings and cache headers. Either:
+## Deployment
 
-- Import the GitHub repo at vercel.com/new (no settings to change), or
-- `npx vercel` (preview) / `npx vercel --prod` from this folder.
+`vercel.json` at the repo root builds `web/` and sets cache headers. Import the repo in Vercel, or run `npx vercel --prod` from the repo root.
 
-Custom domain on Cloudflare: add it in Vercel → Domains, then a DNS-only (grey cloud) CNAME to `cname.vercel-dns.com`.
+For a custom domain behind Cloudflare, add it under Vercel → Domains and create a DNS-only (grey cloud) CNAME to `cname.vercel-dns.com`.
