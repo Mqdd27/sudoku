@@ -45,3 +45,12 @@ REMOTE=me@host WEB_DIR=/var/www/sudoku ./deploy.sh
 ```
 
 Point a Cloudflare DNS record (proxied) at the server for the `server_name` you chose.
+
+## Deploy to Vercel (alternative)
+
+`vercel.json` already holds the build settings and cache headers. Either:
+
+- Import the GitHub repo at vercel.com/new (no settings to change), or
+- `npx vercel` (preview) / `npx vercel --prod` from this folder.
+
+Custom domain on Cloudflare: add it in Vercel → Domains, then a DNS-only (grey cloud) CNAME to `cname.vercel-dns.com`.
