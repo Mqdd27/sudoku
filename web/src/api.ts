@@ -25,7 +25,13 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
 /** The signed-in user, or null. Refreshed by whoAmI() at start and after login/logout. */
 export let me: User | null = null
 export const setMe = (u: User | null) => { me = u }
+/** False on a static-only host (e.g. Vercel): there is no game server, so only Classic is offered. */
+export let hasServer = true
 export async function whoAmI() {
-  try { me = await api<User>('GET', '/me') } catch (e) { if ((e as ApiError).status === 401) me = null }
+  try { me = await api<User>('GET', '/me') } catch (e) {
+    const s = (e as ApiError).status
+    if (s === 401) me = null
+    else if (s === 404 || s === 405) hasServer = false // the server always answers /me with 200 or 401
+  }
   return me
 }
