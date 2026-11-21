@@ -128,10 +128,10 @@ func TestStarsAndElo(t *testing.T) {
 			t.Errorf("stars%v = %d", c, got)
 		}
 	}
-	if a, b := elo(1000, 1000, true); a != 1016 || b != 984 {
+	if a, b := elo(1000, 1000, 1); a != 1016 || b != 984 {
 		t.Fatalf("elo equal: %d %d", a, b)
 	}
-	if a, b := elo(1400, 1000, true); a-1400 >= 16 || a+b != 2400 {
+	if a, b := elo(1400, 1000, 1); a-1400 >= 16 || a+b != 2400 {
 		t.Fatalf("favourite should gain less, zero-sum: %d %d", a, b)
 	}
 }

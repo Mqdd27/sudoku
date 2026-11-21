@@ -46,6 +46,61 @@ func (s Shape) geo() *geo {
 	return g
 }
 
+// Box returns the index of the box holding cell i (row-major over boxes).
+func (s Shape) Box(i int) int { return s.geo().box[i] }
+
+// OpenBoxes reports whether every box has at least one empty cell.
+func OpenBoxes(puzzle []int, s Shape) bool {
+	open := make([]bool, s.Size)
+	for i, v := range puzzle {
+		if v == 0 {
+			open[s.Box(i)] = true
+		}
+	}
+	for _, o := range open {
+		if !o {
+			return false
+		}
+	}
+	return true
+}
+
+// GenerateOpen is Generate with one extra rule: no box starts out full (Time Attack scores whole boxes).
+// It retries with fresh grids, then as a last resort empties one cell of each full box if that keeps the
+// solution unique (which can leave the puzzle a given or two under min).
+func GenerateOpen(s Shape, min, max int, rng *rand.Rand, budget time.Duration) (puzzle, solution []int) {
+	deadline := time.Now().Add(budget)
+	for {
+		puzzle, solution = Generate(s, min, max, rng, time.Until(deadline)/4+time.Millisecond)
+		if OpenBoxes(puzzle, s) || time.Now().After(deadline) {
+			break
+		}
+	}
+	for b := 0; b < s.Size && !OpenBoxes(puzzle, s); b++ {
+		var cells []int
+		full := true
+		for i := range puzzle {
+			if s.Box(i) == b {
+				cells = append(cells, i)
+				full = full && puzzle[i] != 0
+			}
+		}
+		if !full {
+			continue
+		}
+		rng.Shuffle(len(cells), func(i, j int) { cells[i], cells[j] = cells[j], cells[i] })
+		for _, i := range cells {
+			v := puzzle[i]
+			puzzle[i] = 0
+			if CountSolutions(puzzle, s) == 1 {
+				break
+			}
+			puzzle[i] = v
+		}
+	}
+	return puzzle, solution
+}
+
 // Peers returns the cells sharing a row, column or box with cell i.
 func (s Shape) Peers(i int) []int { return s.geo().peers[i] }
 

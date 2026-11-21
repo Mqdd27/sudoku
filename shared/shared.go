@@ -25,6 +25,12 @@ type Config struct {
 		Hints          bool `json:"hints"`
 		HintPenaltySec int  `json:"hintPenaltySec"`
 	} `json:"pvp"`
+	TimeAttack struct {
+		Minutes        map[string][]int `json:"minutes"`        // allowed durations per size; others are hidden and refused
+		DefaultMinutes map[string]int   `json:"defaultMinutes"` // preselected duration per size
+		CooldownMs     int              `json:"cooldownMs"`     // a wrong digit locks that cell this long
+		LateMs         int              `json:"lateMs"`         // moves this late after the end still count (latency)
+	} `json:"timeAttack"`
 }
 
 // Load parses the embedded config. It panics on a malformed file: that is a build error, not a runtime one.

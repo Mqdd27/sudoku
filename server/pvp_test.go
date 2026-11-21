@@ -16,6 +16,7 @@ import (
 type wsc struct {
 	t    *testing.T
 	conn *websocket.Conn
+	srv  *httptest.Server
 }
 
 func dialWS(t *testing.T, srv *httptest.Server, c *client) *wsc {
@@ -31,7 +32,7 @@ func dialWS(t *testing.T, srv *httptest.Server, c *client) *wsc {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { conn.CloseNow() })
-	w := &wsc{t, conn}
+	w := &wsc{t, conn, srv}
 	w.expect("hello")
 	return w
 }
@@ -136,10 +137,10 @@ func TestPvPWinnerDecidedByServer(t *testing.T) {
 	if res["winner"] != "ann" || res["reason"] != "solved" || res["ranked"] != true {
 		t.Fatalf("result: %v", res)
 	}
-	if a.rating(cs[0].id(t), 4) != 1016 || a.rating(cs[1].id(t), 4) != 984 {
+	if a.rating(cs[0].id(t), "race", 4) != 1016 || a.rating(cs[1].id(t), "race", 4) != 984 {
 		t.Fatal("elo not applied for the 4x4 board")
 	}
-	if a.rating(cs[0].id(t), 9) != 1000 {
+	if a.rating(cs[0].id(t), "race", 9) != 1000 {
 		t.Fatal("ratings must be separate per size")
 	}
 
@@ -202,7 +203,7 @@ func TestPvPPrivateRoomReconnectAndForfeit(t *testing.T) {
 	if res["winner"] != "gus" || res["reason"] != "disconnect" || res["ranked"] != false {
 		t.Fatalf("result: %v", res)
 	}
-	if a.rating(cs[1].id(t), 6) != 1000 {
+	if a.rating(cs[1].id(t), "race", 6) != 1000 {
 		t.Fatal("private rooms are unranked")
 	}
 }
@@ -218,7 +219,7 @@ func dialWS2(t *testing.T, srv *httptest.Server, c *client) *wsc {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { conn.CloseNow() })
-	return &wsc{t, conn}
+	return &wsc{t, conn, srv}
 }
 
 func TestPvPResignAndAuth(t *testing.T) {
