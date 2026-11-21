@@ -26,27 +26,7 @@ src/style.css          mobile-first layout, light/dark themes
 public/sw.js           hand-written service worker (precache list injected at build, see vite.config.ts)
 ```
 
-## Deploy
-
-One-time on the server (Ubuntu + nginx):
-
-```sh
-sudo mkdir -p /opt/sudoku && sudo chown "$USER": /opt/sudoku
-sudo cp nginx.conf /etc/nginx/sites-available/sudoku   # edit server_name first
-sudo ln -s /etc/nginx/sites-available/sudoku /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-Then from your machine, every release:
-
-```sh
-./deploy.sh                                     # defaults: mqdd@100.115.174.40:/opt/sudoku
-REMOTE=me@host WEB_DIR=/var/www/sudoku ./deploy.sh
-```
-
-Point a Cloudflare DNS record (proxied) at the server for the `server_name` you chose.
-
-## Deploy to Vercel (alternative)
+## Deploy (Vercel)
 
 `vercel.json` already holds the build settings and cache headers. Either:
 
