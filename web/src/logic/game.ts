@@ -1,5 +1,5 @@
 // Game state + undo history. Pure data, no DOM, and no solution: answers come from a GameSource.
-import type { Level } from '../config'
+import type { Level, Size } from '../config'
 import type { Grid } from './sudoku'
 
 export type CheckMode = 'rules' | 'solution'
@@ -7,23 +7,26 @@ type Change = [cell: number, value: number, notes: number] // previous state of 
 
 export interface Game {
   id: string // GameSource game id
+  size: Size
   level: Level
   puzzle: Grid
   values: Grid
   notes: number[] // bitmask per cell, bit d = candidate d
   wrong: number[] // cells the source said are wrong (solution check mode)
   mistakes: number
+  hints: number
   elapsed: number // seconds
   history: Change[][]
   done: boolean
 }
 
-export const newGame = (s: { id: string; level: Level; puzzle: Grid }): Game => ({
+export const newGame = (s: { id: string; size: Size; level: Level; puzzle: Grid }): Game => ({
   ...s,
   values: s.puzzle.slice(),
-  notes: new Array(81).fill(0),
+  notes: new Array(s.puzzle.length).fill(0),
   wrong: [],
   mistakes: 0,
+  hints: 0,
   elapsed: 0,
   history: [],
   done: false,

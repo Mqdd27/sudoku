@@ -1,4 +1,7 @@
 import { generate } from './logic/sudoku'
-import type { Level } from './config'
+import { givens, shapeOf, type Level, type Size } from './config'
 
-self.onmessage = (e: MessageEvent<Level>) => self.postMessage(generate(e.data))
+self.onmessage = (e: MessageEvent<[Size, Level]>) => {
+  const [size, level] = e.data
+  self.postMessage(generate(shapeOf(size), givens(size, level)))
+}

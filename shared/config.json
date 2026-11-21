@@ -1,0 +1,13 @@
+{
+  "sizes": {
+    "4": { "boxRows": 2, "boxCols": 2, "name": "Mini", "minutes": "1–3" },
+    "6": { "boxRows": 2, "boxCols": 3, "name": "Medium", "minutes": "3–8" },
+    "9": { "boxRows": 3, "boxCols": 3, "name": "Classic", "minutes": "10–30" }
+  },
+  "givens": {
+    "4": { "easy": [8, 10], "medium": [6, 7], "hard": [5, 5], "expert": [4, 4] },
+    "6": { "easy": [18, 20], "medium": [14, 16], "hard": [11, 13], "expert": [9, 10] },
+    "9": { "easy": [40, 45], "medium": [32, 36], "hard": [28, 31], "expert": [24, 27] }
+  },
+  "pvp": { "hints": false, "hintPenaltySec": 30 }
+}

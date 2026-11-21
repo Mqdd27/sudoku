@@ -1,0 +1,56 @@
+{
+  "format": "Grids are 16 digits, row-major from the top-left cell; 0 = empty. Boxes are 2 rows x 2 columns. Every puzzle has exactly one solution.",
+  "size": 4,
+  "boxRows": 2,
+  "boxCols": 2,
+  "puzzles": [
+    {
+      "level": "easy",
+      "givens": 9,
+      "puzzle": "2000430032141400",
+      "solution": "2143432132141432"
+    },
+    {
+      "level": "easy",
+      "givens": 10,
+      "puzzle": "4002234110203200",
+      "solution": "4132234114233214"
+    },
+    {
+      "level": "medium",
+      "givens": 7,
+      "puzzle": "3040000020140120",
+      "solution": "3241143223144123"
+    },
+    {
+      "level": "medium",
+      "givens": 6,
+      "puzzle": "2004042000020010",
+      "solution": "2134342113424213"
+    },
+    {
+      "level": "hard",
+      "givens": 5,
+      "puzzle": "0020000320001030",
+      "solution": "3124421323411432"
+    },
+    {
+      "level": "hard",
+      "givens": 5,
+      "puzzle": "0301400000000403",
+      "solution": "2341413232141423"
+    },
+    {
+      "level": "expert",
+      "givens": 4,
+      "puzzle": "2000403000040000",
+      "solution": "2341413232141423"
+    },
+    {
+      "level": "expert",
+      "givens": 4,
+      "puzzle": "0400000201000030",
+      "solution": "2413134231244231"
+    }
+  ]
+}

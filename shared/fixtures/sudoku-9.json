@@ -1,5 +1,8 @@
 {
-  "format": "Each grid is 81 digits, row-major from the top-left cell; 0 = empty. Every puzzle has exactly one solution.",
+  "format": "Grids are 81 digits, row-major from the top-left cell; 0 = empty. Boxes are 3 rows x 3 columns. Every puzzle has exactly one solution.",
+  "size": 9,
+  "boxRows": 3,
+  "boxCols": 3,
   "puzzles": [
     {
       "level": "classic",
