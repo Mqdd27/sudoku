@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Sudoku – no game over, play offline.">
+  <title>Sudoku</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="bar">
+      <select id="level" aria-label="Level"></select>
+      <button id="new" class="primary">New Game</button>
+      <button id="settings-btn" class="icon" aria-label="Settings">⚙</button>
+    </header>
+
+    <div class="board-wrap">
+      <div id="board" class="board" role="grid" aria-label="Sudoku board"></div>
+      <button id="resume" class="overlay" hidden>▶ Resume</button>
+    </div>
+
+    <section class="panel">
+      <div class="status">
+        <span id="level-label"></span>
+        <span>Mistakes: <b id="mistakes">0</b></span>
+        <button id="timer" class="timer" aria-label="Pause">00:00 ⏸</button>
+      </div>
+      <div class="actions">
+        <button id="undo" title="Undo (Ctrl+Z)">↶<small>Undo</small></button>
+        <button id="erase" title="Erase (Backspace)">⌫<small>Erase</small></button>
+        <button id="notes" title="Notes (N)" aria-pressed="false">✎<small>Notes</small></button>
+        <button id="hint" title="Hint">💡<small>Hint</small></button>
+      </div>
+      <div id="pad" class="pad"></div>
+    </section>
+  </main>
+
+  <dialog id="win">
+    <h2>Solved! 🎉</h2>
+    <p id="win-text"></p>
+    <form method="dialog"><button id="win-new" class="primary">New Game</button></form>
+  </dialog>
+
+  <dialog id="settings">
+    <form method="dialog">
+      <h2>Settings</h2>
+      <fieldset>
+        <legend>Mistake check</legend>
+        <label><input type="radio" name="check" value="rules"> Rules only (duplicates in row/col/box)</label>
+        <label><input type="radio" name="check" value="solution"> Against the solution</label>
+      </fieldset>
+      <label>Theme
+        <select name="theme"><option value="auto">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+      </label>
+      <h3>Stats</h3>
+      <table id="stats"></table>
+      <button class="primary">Close</button>
+    </form>
+  </dialog>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
