@@ -1,6 +1,6 @@
 # Sudoku
 
-Sudoku in the browser on 4×4, 6×6 and 9×9 boards. Classic mode generates puzzles on the device and plays offline. With an account there is also a Story Mode (40 fixed levels with stars) and PvP races, ranked or in private rooms. Mistakes never end a game.
+Sudoku in the browser on 4×4, 6×6 and 9×9 boards. Classic mode generates puzzles on the device and plays offline. With an account there is also a Story Mode (40 fixed levels with stars) and PvP, ranked or in private rooms: a Race to finish the same puzzle first, or Time Attack, where the most finished boxes when the clock runs out wins. Mistakes never end a game.
 
 - **Frontend:** plain TypeScript, HTML and CSS built with Vite. No runtime dependencies.
 - **Backend:** one Go binary with SQLite (`modernc.org/sqlite`, no CGO). It listens on 127.0.0.1 only, behind nginx.
@@ -51,7 +51,7 @@ Environment variables, or a `.env` file in the working directory (see `.env.exam
 | `TRUSTED_PROXIES` | `127.0.0.1/32,::1/128` | Peers whose `CF-Connecting-IP`/`X-Real-IP` are trusted |
 | `ENV_FILE` | `.env` | Where to read the env file from |
 
-Board sizes, givens per level and the PvP hint setting are in `shared/config.json`. Both the web app and the server read this file.
+Board sizes, givens per level, the PvP hint setting and Time Attack durations, cooldown and late-move allowance are in `shared/config.json`. Both the web app and the server read this file.
 
 Story levels are in `server/story/levels.json`. They come from a fixed seed, so regenerating them gives the same file: `cd server && go run ./cmd/genlevels`. To add a chapter, append it in `cmd/genlevels/main.go` and run the command again. Existing levels stay the same.
 
@@ -70,7 +70,7 @@ server/
   sudoku/          solver and generator for any box shape
   migrations/      numbered SQL files, embedded and applied on start
   auth.go          argon2id passwords, hashed session tokens, rate limits
-  story.go pvp.go stats.go
+  story.go pvp.go ta.go stats.go
   cmd/genlevels/   builds story/levels.json
 docs/protocol.md   PvP WebSocket messages
 deploy/            systemd unit, nginx site, backup + deploy scripts, optional Dockerfile

@@ -15,7 +15,12 @@ export interface Play {
   onWin(g: Game): void
   /** Elapsed seconds from an outside clock (PvP: server start time). Default: the game's own counter. */
   clock?: () => number
+  /** Time Attack: the clock counts down (warn near zero), no undo, bigger timer. */
+  timed?: boolean
 }
+
+/** Server-driven cell states (Time Attack). The owner edits the sets and calls paint(). */
+export const marks = { locked: new Set<number>(), cooling: new Set<number>(), boxes: new Set<number>(), fresh: -1 }
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T
 export const fmt = (s: number) => {
@@ -69,6 +74,10 @@ export function mount(p: Play) {
   keys = new Array(cells.length).fill('')
   sel = -1
   paused = false
+  marks.locked.clear(); marks.cooling.clear(); marks.boxes.clear(); marks.fresh = -1
+  if (p.timed) app.dataset.mode = 'timed'
+  else delete app.dataset.mode
+  $('undo').hidden = !!p.timed
   hintBtn.hidden = !p.source.hints
   timerBtn.toggleAttribute('disabled', !p.source.pausable)
   syncTimer()
@@ -87,8 +96,9 @@ export const current = () => play?.game ?? null
 // ---------- render ----------
 const elapsed = () => (play?.clock ? play.clock() : play?.game.elapsed ?? 0)
 const showTime = () => {
-  const pausable = play?.source.pausable
-  timerBtn.textContent = fmt(elapsed()) + (pausable ? (paused ? ' ▶' : ' ⏸') : '')
+  const pausable = play?.source.pausable, t = elapsed()
+  timerBtn.textContent = fmt(t) + (pausable ? (paused ? ' ▶' : ' ⏸') : '')
+  timerBtn.classList.toggle('urgent', !!play?.timed && t <= 10 && !play.game.done)
   timerBtn.setAttribute('aria-label', paused ? 'Resume' : 'Pause')
 }
 
@@ -102,6 +112,7 @@ export function paint() {
   const sv = sel >= 0 ? g.values[sel] : 0
   const counts = new Array(shape.size + 1).fill(0)
   const n = shape.size
+  const { box } = geo(shape)
 
   for (let i = 0; i < cells.length; i++) {
     const v = g.values[i], m = g.notes[i], c = cells[i]
@@ -120,6 +131,9 @@ export function paint() {
     if (v && v === sv) cls += ' same'
     if (wrong.has(i)) cls += ' wrong'
     if (i === sel) cls += ' sel'
+    if (marks.locked.has(i)) cls += ' lock'
+    if (marks.cooling.has(i)) cls += ' cool'
+    if (marks.boxes.has(box[i])) cls += box[i] === marks.fresh ? ' boxdone boxnew' : ' boxdone'
     if (c.className !== cls) c.className = cls
   }
   padBtns.forEach((b, k) => {
@@ -184,7 +198,7 @@ async function trySubmit() {
 
 async function input(d: number) {
   const g = play?.game
-  if (!g || paused || sel < 0) return
+  if (!g || paused || sel < 0 || marks.locked.has(sel) || marks.cooling.has(sel)) return
   const i = sel
   if (notesMode) { if (toggleNote(g, i, d)) changed(); return }
   if (!setValue(g, i, d)) return
@@ -193,10 +207,10 @@ async function input(d: number) {
   await verify(i, true)
   await trySubmit()
 }
-function doErase() { const g = play?.game; if (g && !paused && sel >= 0 && erase(g, sel)) changed() }
+function doErase() { const g = play?.game; if (g && !paused && sel >= 0 && !marks.locked.has(sel) && erase(g, sel)) changed() }
 async function doUndo() {
   const g = play?.game
-  if (!g || paused) return
+  if (!g || paused || play!.timed) return
   const i = undo(g)
   if (i < 0) return
   sel = i

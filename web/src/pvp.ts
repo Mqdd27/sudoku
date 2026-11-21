@@ -2,8 +2,8 @@
 // the clock and the result; this file only renders what it says.
 import { needLogin } from './account'
 import { me } from './api'
-import { fmt, mount, stop } from './board'
-import { LEVELS, PVP, SIZES, sizeInfo, type Level, type Size } from './config'
+import { fmt, marks, mount, paint, stop } from './board'
+import { LEVELS, PVP, SIZES, sizeInfo, TA, type Level, type Size } from './config'
 import { newGame, type Game } from './logic/game'
 import type { Grid } from './logic/sudoku'
 import type { GameSource } from './source'
@@ -76,10 +76,12 @@ class PvpSource implements GameSource {
 // ---------- state ----------
 let src: PvpSource | null = null
 let game: Game | null = null
-let room: { size: Size; level: Level; code: string; ranked: boolean; players: Player[] } | null = null
-let pick: { size: Size; level: Level } = { size: 9, level: 'easy' }
+type Mode = 'race' | 'ta'
+let room: { mode: Mode; minutes: number; size: Size; level: Level; code: string; ranked: boolean; players: Player[] } | null = null
+let pick: { mode: Mode; size: Size; level: Level; minutes: number } = { mode: 'race', size: 9, level: 'easy', minutes: TA.defaultMinutes[9] }
 let offset = 0 // server clock − local clock
 let startAt = 0
+let endsAt = 0 // Time Attack
 let countTimer = 0
 
 const serverNow = () => Date.now() + offset
@@ -105,9 +107,20 @@ function onMsg(m: Msg) {
     case 'lobby': room = m as any; lobbyPage(); break
     case 'countdown': offset = m.now - Date.now(); startAt = m.startAt; countdownPage(); break
     case 'start': offset = m.now - Date.now(); startAt = m.startAt; startGame(m.puzzle, m.puzzle, 0); break
+    case 'ta_start': offset = m.serverNow - Date.now(); startTA(m); break
+    case 'ta_cell_result': taResult(m); break
+    case 'ta_box_done':
+      marks.boxes.add(m.box)
+      marks.fresh = m.box
+      paint()
+      setTimeout(() => { if (marks.fresh === m.box) { marks.fresh = -1; paint() } }, 700)
+      break
+    case 'ta_score': taScores(m.you, m.opponent); break
+    case 'ta_end': taEnd(m); break
     case 'state':
       room = m as any
       offset = m.now - Date.now()
+      if (m.phase === 'playing' && m.mode === 'ta') { startTA(m); break }
       if (m.phase === 'lobby') lobbyPage()
       else if (m.phase === 'countdown') { startAt = m.startAt; countdownPage() }
       else if (m.phase === 'playing') {
@@ -128,7 +141,7 @@ function onMsg(m: Msg) {
       if (src) { src.sent[m.cell] = m.value; src.hintWait?.({ cell: m.cell, value: m.value }); src.hintWait = null }
       break
     case 'opponent': oppUpdate(m.progress, m.mistakes); break
-    case 'opponent_away': setOpp(`Opponent disconnected, ${m.graceSec}s to come back`); break
+    case 'opponent_away': setOpp(m.graceSec ? `Opponent disconnected, ${m.graceSec}s to come back` : 'Opponent disconnected'); break
     case 'opponent_back': setOpp(''); break
     case 'result': result(m); break
     case 'rematch':
@@ -151,7 +164,10 @@ const backBtn = '<a href="#/" class="btn icon" aria-label="Back">←</a>'
 export function pvpPage(arg: string) {
   if (needLogin('#/pvp' + (arg ? '/' + arg : ''))) return
   connect()
-  if (game && !game.done && room) return startGame(game.puzzle, game.values, game.mistakes) // back to a running match
+  if (game && !game.done && room) { // back to a running match: the server resends its state
+    if (room.mode === 'ta') { ws?.close(); return waitPage('Rejoining…') }
+    return startGame(game.puzzle, game.values, game.mistakes)
+  }
   if (room) return lobbyPage()
   if (arg) { send({ t: 'join', code: arg }); return waitPage('Joining room…') }
   pickPage()
@@ -167,22 +183,34 @@ function pickPage() {
         <span class="mini" style="--m:${s};--bc:${i.boxCols};--br:${i.boxRows}"></span>
         <b>${i.name} ${s}×${s}</b><small>About ${i.minutes} min</small></button>`
     }).join('')}</div>
+    <div class="row" role="radiogroup" aria-label="Mode" id="p-mode">${(['race', 'ta'] as Mode[]).map((md) =>
+      `<button class="btn${md === pick.mode ? ' primary' : ''}" data-mode="${md}" role="radio" aria-checked="${md === pick.mode}">${md === 'race' ? 'Race' : 'Time Attack'}</button>`).join('')}</div>
+    <p class="muted" id="p-mode-help"></p>
     <label class="spread">Level <select id="p-level">${Object.entries(LEVELS).map(([k, l]) =>
       `<option value="${k}"${k === pick.level ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="spread" id="p-dur-row">Duration <select id="p-dur"></select></label>
     <div class="row"><button class="primary" id="p-quick">Quick match</button><button id="p-room">Private room</button></div>
-    <p class="muted">Quick match is ranked (Elo per board size). Private rooms are just for fun.</p>
+    <p class="muted">Quick match is ranked (Elo per mode and board size). Private rooms are just for fun.</p>
     <form class="row" id="p-join"><input type="text" name="code" placeholder="Room code" maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-label="Room code" style="width:8rem"><button>Join</button></form>
     <p class="err" id="pvp-err" role="alert"></p>`)
   document.querySelector('.sizes')!.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>('[data-size]')
     if (!b) return
     pick.size = +b.dataset.size! as Size
+    pick.minutes = TA.defaultMinutes[pick.size]
     document.querySelectorAll('.sizes .tile').forEach((t) => {
       const on = t === b
       t.classList.toggle('on', on)
       t.setAttribute('aria-checked', String(on))
     })
+    syncPick()
   })
+  $('p-mode').onclick = (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')
+    if (b) { pick.mode = b.dataset.mode as Mode; syncPick() }
+  }
+  $('p-dur').onchange = (e) => { pick.minutes = +(e.target as HTMLSelectElement).value }
+  syncPick()
   $('p-level').onchange = (e) => { pick.level = (e.target as HTMLSelectElement).value as Level }
   $('p-quick').onclick = () => send({ t: 'queue', ...pick })
   $('p-room').onclick = () => send({ t: 'create', ...pick })
@@ -193,6 +221,25 @@ function pickPage() {
   }
 }
 
+/** Mode buttons, help text and the duration list follow the chosen mode and size. */
+function syncPick() {
+  document.querySelectorAll<HTMLElement>('#p-mode [data-mode]').forEach((b) => {
+    const on = b.dataset.mode === pick.mode
+    b.classList.toggle('primary', on)
+    b.setAttribute('aria-checked', String(on))
+  })
+  const ta = pick.mode === 'ta'
+  $('p-mode-help').textContent = ta
+    ? 'Same puzzle, fixed time. Most finished boxes wins, then most correct cells, then fewest mistakes. A wrong digit locks that cell for a moment.'
+    : 'Same puzzle. First correct board wins.'
+  $('p-dur-row').hidden = !ta
+  const allowed = TA.minutes[pick.size] ?? []
+  if (!allowed.includes(pick.minutes)) pick.minutes = TA.defaultMinutes[pick.size] ?? allowed[0]
+  $('p-dur').innerHTML = allowed.map((n) => `<option value="${n}"${n === pick.minutes ? ' selected' : ''}>${n} min</option>`).join('')
+}
+
+const modeLabel = (r: { mode: Mode; minutes: number }) => (r.mode === 'ta' ? `Time Attack ${r.minutes} min` : 'Race')
+
 function waitPage(text: string) {
   showPage(`<div class="top">${backBtn}<h1 tabindex="-1">PvP</h1></div><p>${text}</p><p class="err" id="pvp-err" role="alert"></p>`)
 }
@@ -200,7 +247,7 @@ function waitPage(text: string) {
 function queuePage(timeoutSec: number) {
   showPage(`
     <div class="top"><h1 tabindex="-1">Finding an opponent…</h1></div>
-    <p>${sizeInfo(pick.size).name} ${pick.size}×${pick.size} · ${LEVELS[pick.level]}</p>
+    <p>${modeLabel(pick)} · ${sizeInfo(pick.size).name} ${pick.size}×${pick.size} · ${LEVELS[pick.level]}</p>
     <p class="muted">Waiting up to ${timeoutSec}s.</p>
     <button id="p-cancel">Cancel</button>`)
   $('p-cancel').onclick = () => send({ t: 'cancel' })
@@ -212,7 +259,7 @@ function lobbyPage() {
   const link = `${location.origin}/#/pvp/${r.code}`
   showPage(`
     <div class="top"><h1 tabindex="-1">${r.ranked ? 'Ranked match' : 'Private room'}</h1></div>
-    <p>${sizeInfo(r.size).name} ${r.size}×${r.size} · ${LEVELS[r.level]}</p>
+    <p>${modeLabel(r)} · ${sizeInfo(r.size).name} ${r.size}×${r.size} · ${LEVELS[r.level]}</p>
     ${r.ranked ? '' : `<p>Room code <b class="code">${esc(r.code)}</b></p>
       <div class="row"><button id="p-copy">Copy invite link</button></div>`}
     <table class="list">${r.players.map((p) => `<tr><td>${esc(p.name)}${p.name === me?.username ? ' (you)' : ''}</td><td>${p.rating}</td><td>${p.ready ? '✓ Ready' : '…'}</td></tr>`).join('')}
@@ -270,6 +317,98 @@ async function result(m: Msg) {
   const rows = (m.players as any[]).map((p) => `<tr><td>${esc(p.name)}${p.name === m.winner ? ' 🏆' : ''}</td><td>${p.ms == null ? '–' : fmt(Math.round(p.ms / 1000))}</td><td>${p.mistakes}</td>${m.ranked ? `<td>${p.rating} (${p.delta >= 0 ? '+' : ''}${p.delta})</td>` : ''}</tr>`).join('')
   const i = await dialog(title, `<p class="muted">${m.reason === 'solved' ? 'First correct board wins.' : 'Match ended' + why + '.'}</p>
     <table class="list"><tr><th>Player</th><th>Time</th><th>✗</th>${m.ranked ? '<th>Rating</th>' : ''}</tr>${rows}</table>`,
+    ['Rematch', 'New match', 'Home'])
+  if (i === 0 && room) { send({ t: 'rematch' }); setOpp('Waiting for opponent…') }
+  else { send({ t: 'leave' }); room = null; go(i === 1 ? '#/pvp' : '#/') }
+}
+
+// ---------- Time Attack ----------
+interface Score { boxes: number; cells: number; mistakes: number }
+let oppScore: Score = { boxes: 0, cells: 0, mistakes: 0 }
+
+function startTA(m: Msg) {
+  clearInterval(countTimer)
+  const r = room!
+  startAt = m.startsAt
+  endsAt = m.endsAt
+  game = newGame({ id: 'ta-' + r.code, size: r.size, level: r.level, puzzle: m.puzzle })
+  const values: Grid = m.values ?? m.puzzle
+  game.values = values.slice()
+  game.mistakes = m.you?.mistakes ?? 0
+  src = new PvpSource(values)
+  const o = opponent()
+  showGame(`<span class="ta"><b>You</b><span id="ta-me"></span></span>
+    <span class="ta"><b>${esc(o?.name ?? 'Opponent')}</b><span id="ta-op"></span></span>
+    <button id="p-resign">Resign</button>`, `${r.size}×${r.size} · ${LEVELS[r.level]}`)
+  document.getElementById('game-info')!.insertAdjacentHTML('beforeend', ' <small id="opp-s" class="muted"></small>')
+  $('p-resign').onclick = async () => {
+    if (await dialog('Resign?', '<p>Your opponent wins this match.</p>', ['Resign', 'Keep playing']) === 0) send({ t: 'resign' })
+  }
+  mount({ game, source: src, onWin: () => {}, timed: true, clock: () => Math.max(0, Math.ceil((endsAt - serverNow()) / 1000)) })
+  // after mount (which resets marks): restore what the server says is locked, cooling and finished
+  values.forEach((v, i) => { if (v && !m.puzzle[i]) marks.locked.add(i) })
+  for (const [cell, until] of Object.entries((m.cooldowns ?? {}) as Record<string, number>)) cool(+cell, until)
+  ;((m.boxesDone ?? []) as boolean[]).forEach((d, b) => d && marks.boxes.add(b))
+  taScores(m.you ?? { boxes: 0, cells: 0, mistakes: 0 }, m.opponent ?? { boxes: 0, cells: 0, mistakes: 0 })
+  if (m.opponent && m.opponent.connected === false) setOpp('Opponent disconnected')
+  paint()
+}
+
+function taScores(you: Score, opp: Score) {
+  oppScore = opp
+  const n = room?.size ?? 9, txt = (s: Score) => `${s.boxes}/${n} ▦ · ${s.cells} ✓`
+  const me_ = document.getElementById('ta-me'), op = document.getElementById('ta-op')
+  if (me_) { me_.textContent = txt(you); me_.title = `${you.boxes} boxes, ${you.cells} correct cells` }
+  if (op) { op.textContent = txt(opp); op.title = `${opp.boxes} boxes, ${opp.cells} correct cells, ${opp.mistakes} mistakes` }
+}
+
+/** A wrong digit freezes the cell until `until` (server time), then it's cleared for another try. */
+function cool(cell: number, until: number) {
+  marks.cooling.add(cell)
+  setTimeout(() => {
+    marks.cooling.delete(cell)
+    const g = game
+    if (g && src && !marks.locked.has(cell) && g.values[cell]) {
+      g.values[cell] = 0
+      src.sent[cell] = 0
+      g.wrong = g.wrong.filter((i) => i !== cell)
+    }
+    paint()
+  }, Math.max(0, until - serverNow()))
+}
+
+function taResult(m: Msg) {
+  const g = game, w = src?.waiting.get(m.cell)
+  src?.waiting.delete(m.cell)
+  if (!g || !src) return
+  if (m.rejected) {
+    // nothing changed on the server: put the cell back the way the server has it
+    if (!marks.locked.has(m.cell) && g.values[m.cell] === m.value && m.rejected !== 'cooldown') { g.values[m.cell] = 0; src.sent[m.cell] = 0 }
+    w?.({ correct: true, mistakes: g.mistakes })
+    paint()
+    return
+  }
+  if (m.correct) marks.locked.add(m.cell)
+  else if (m.cooldownUntil) cool(m.cell, m.cooldownUntil)
+  g.mistakes = m.mistakes
+  w?.({ correct: m.correct, mistakes: m.mistakes })
+  taScores(m as unknown as Score, oppScore)
+  paint()
+}
+
+const WHY: Record<string, string> = {
+  boxes: 'More finished boxes.', cells: 'Same number of boxes, more correct cells.',
+  mistakes: 'Same boxes and cells, fewer mistakes.', draw: 'Same boxes, cells and mistakes.',
+  board: 'Finished the whole board before time ran out.', resign: 'The other player resigned.',
+}
+
+async function taEnd(m: Msg) {
+  if (game) { game.done = true; stop() }
+  const won = m.winner === me?.username
+  const title = !m.winner ? 'Draw' : won ? 'You won! 🎉' : `${m.winner} won`
+  const rows = (m.players as any[]).map((p) => `<tr><td>${esc(p.name)}${p.name === m.winner ? ' 🏆' : ''}</td><td>${p.boxes}/${m.boxesTotal}</td><td>${p.cells}</td><td>${p.mistakes}</td>${m.ranked ? `<td>${p.rating} (${p.delta >= 0 ? '+' : ''}${p.delta})</td>` : ''}</tr>`).join('')
+  const i = await dialog(title, `<p class="muted">${WHY[m.reason] ?? ''}</p>
+    <table class="list"><tr><th>Player</th><th>Boxes</th><th>✓</th><th>✗</th>${m.ranked ? '<th>Rating</th>' : ''}</tr>${rows}</table>`,
     ['Rematch', 'New match', 'Home'])
   if (i === 0 && room) { send({ t: 'rematch' }); setOpp('Waiting for opponent…') }
   else { send({ t: 'leave' }); room = null; go(i === 1 ? '#/pvp' : '#/') }

@@ -3,7 +3,7 @@
   --bg: #f6f7f9; --surface: #fff; --fg: #1b1e24; --muted: #5d6573;
   --user: #2457c5; --thin: #c9ced8; --thick: #2a2f38;
   --peer: #e6ebf3; --same: #c9d8f5; --sel: #a9c2f2; --hover: #eef2f8;
-  --bad: #c62828; --badbg: #fbe3e3; --accent: #2457c5; --accent-fg: #fff;
+  --bad: #c62828; --badbg: #fbe3e3; --done: #8fd19e; --donebg: #e3f4e7; --accent: #2457c5; --accent-fg: #fff;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -11,7 +11,7 @@
     --bg: #14161a; --surface: #1d2026; --fg: #e8eaef; --muted: #9aa3b2;
     --user: #8fb4ff; --thin: #3a404b; --thick: #c4cad6;
     --peer: #252b35; --same: #2f4166; --sel: #3d5a94; --hover: #2a2f38;
-    --bad: #ff7b7b; --badbg: #4a2323; --accent: #8fb4ff; --accent-fg: #10131a;
+    --bad: #ff7b7b; --badbg: #4a2323; --done: #3f8f55; --donebg: #1f3a28; --accent: #8fb4ff; --accent-fg: #10131a;
   }
 }
 :root[data-theme="dark"] {
@@ -19,7 +19,7 @@
   --bg: #14161a; --surface: #1d2026; --fg: #e8eaef; --muted: #9aa3b2;
   --user: #8fb4ff; --thin: #3a404b; --thick: #c4cad6;
   --peer: #252b35; --same: #2f4166; --sel: #3d5a94; --hover: #2a2f38;
-  --bad: #ff7b7b; --badbg: #4a2323; --accent: #8fb4ff; --accent-fg: #10131a;
+  --bad: #ff7b7b; --badbg: #4a2323; --done: #3f8f55; --donebg: #1f3a28; --accent: #8fb4ff; --accent-fg: #10131a;
 }
 
 * { box-sizing: border-box; }
@@ -85,6 +85,20 @@ button:disabled { opacity: .6; cursor: progress; }
 .wrong { background: var(--badbg); }
 .wrong:not(.given) { color: var(--bad); }
 .sel { background: var(--sel); }
+/* Time Attack: finished boxes, locked cells, cells cooling down after a wrong digit */
+.boxdone { background: var(--donebg); }
+.boxdone.sel { background: var(--sel); }
+.boxnew { animation: boxpop .6s ease-out; }
+@keyframes boxpop { from { background: var(--done); } }
+.lock { cursor: default; }
+.cool { background: repeating-linear-gradient(135deg, var(--badbg) 0 6px, transparent 6px 12px); cursor: wait; }
+[data-mode="timed"] .timer { font-size: 1.6rem; height: 2rem; font-weight: 700; }
+[data-mode="timed"] .status { height: 2rem; }
+.timer.urgent { color: var(--bad); animation: blink 1s steps(2, jump-none) infinite; }
+@keyframes blink { 50% { opacity: .45; } }
+.ta { display: grid; line-height: 1.15; font-size: .8rem; min-width: 0; }
+.ta b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 6rem; }
+.ta span { font-variant-numeric: tabular-nums; font-size: .95rem; }
 .notes {
   display: grid; grid-template: repeat(var(--br), 1fr) / repeat(var(--bc), 1fr);
   place-items: center; width: 100%; height: 100%; font-size: calc(26cqi / var(--n, 9)); line-height: 1; color: var(--muted);

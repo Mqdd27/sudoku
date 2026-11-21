@@ -7,6 +7,7 @@ export type Size = 4 | 6 | 9
 
 export const LEVELS: Record<Level, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard', expert: 'Expert' }
 export const PVP = shared.pvp
+export const TA = shared.timeAttack as { minutes: Record<string, number[]>; defaultMinutes: Record<string, number>; cooldownMs: number; lateMs: number }
 export const SIZES: Size[] = [4, 6, 9]
 
 type SizeCfg = { boxRows: number; boxCols: number; name: string; minutes: string }

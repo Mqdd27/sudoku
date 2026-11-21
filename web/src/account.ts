@@ -1,7 +1,7 @@
 // Sign in / register, profile (stats, devices, delete), Classic stats import, leaderboard.
 import { api, ApiError, me, setMe, type User } from './api'
 import { fmt } from './board'
-import { LEVELS, SIZES, type Level } from './config'
+import { LEVELS, SIZES, TA, type Level } from './config'
 import { load, store } from './storage'
 import { $, dialog, esc, go, showPage } from './ui'
 
@@ -68,7 +68,8 @@ interface Profile {
   username: string; createdAt: number
   classic: { size: number; level: Level; solved: number; bestMs: number | null }[]
   story: { completed: number; stars: number; total: number }
-  pvp: { size: number; rating: number; wins: number; losses: number }[]
+  pvp: { mode: string; size: number; rating: number; wins: number; losses: number; draws: number }[]
+  timeAttack: { wins: number; losses: number; draws: number; bestBoxes: number; avgBoxes: number }
 }
 interface Session { id: string; current: boolean; lastSeen: number; userAgent: string; ip: string }
 
@@ -90,8 +91,10 @@ export async function profilePage(name: string) {
     <h2>Story</h2>
     <p>${p.story.completed} / ${p.story.total} levels · ${p.story.stars} ★</p>
     <h2>PvP</h2>
-    ${p.pvp.length ? `<table class="list"><tr><th>Board</th><th>Rating</th><th>W / L</th></tr>${rows(p.pvp.map((r) =>
-      [`${r.size}×${r.size}`, String(r.rating), `${r.wins} / ${r.losses}`]))}</table>` : '<p class="muted">No matches yet.</p>'}
+    ${p.pvp.length ? `<table class="list"><tr><th>Mode</th><th>Board</th><th>Rating</th><th>W / L / D</th></tr>${rows(p.pvp.map((r) =>
+      [r.mode === 'ta' ? 'Time Attack' : 'Race', `${r.size}×${r.size}`, String(r.rating), `${r.wins} / ${r.losses} / ${r.draws}`]))}</table>` : '<p class="muted">No matches yet.</p>'}
+    ${p.timeAttack.wins + p.timeAttack.losses + p.timeAttack.draws ? `<p>Time Attack: ${p.timeAttack.wins} won, ${p.timeAttack.losses} lost, ${p.timeAttack.draws} drawn ·
+      best ${p.timeAttack.bestBoxes} boxes · average ${p.timeAttack.avgBoxes.toFixed(1)} boxes</p>` : ''}
     ${own ? `
       <h2>Devices</h2><div id="devices" class="muted">Loading…</div>
       <div class="row"><button id="logout">Sign out</button><button id="others">Sign out other devices</button><button id="delete">Delete account</button></div>` : ''}`)
@@ -126,16 +129,17 @@ export async function profilePage(name: string) {
   }
 }
 
-interface BoardRow { username: string; value: number; wins?: number; losses?: number }
+interface BoardRow { username: string; value: number; wins?: number; losses?: number; cells?: number }
 
 export function leaderboardPage() {
-  const s = { kind: 'pvp', size: '9', level: 'easy', story: '1' }
+  const s = { kind: 'race', size: '9', level: 'easy', story: '1', minutes: '3' }
   showPage(`
     <div class="top">${back()}<h1 tabindex="-1">Leaderboard</h1></div>
     <form class="row" id="lb">
-      <select name="kind" aria-label="Mode"><option value="pvp">PvP rating</option><option value="classic">Classic best time</option><option value="story">Story best time</option></select>
+      <select name="kind" aria-label="Mode"><option value="race">Race rating</option><option value="ta">Time Attack rating</option><option value="tarec">Time Attack records</option><option value="classic">Classic best time</option><option value="story">Story best time</option></select>
       <select name="size" aria-label="Board size">${SIZES.map((n) => `<option value="${n}"${n === 9 ? ' selected' : ''}>${n}×${n}</option>`).join('')}</select>
       <select name="level" aria-label="Level">${Object.entries(LEVELS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
+      <select name="minutes" aria-label="Duration">${[...new Set(Object.values(TA.minutes).flat())].sort((a, b) => a - b).map((n) => `<option value="${n}"${n === 3 ? ' selected' : ''}>${n} min</option>`).join('')}</select>
       <label>Level <input type="number" name="story" min="1" value="1" style="width:5rem;min-height:44px"></label>
     </form>
     <div id="lb-out"></div>`)
@@ -144,15 +148,21 @@ export function leaderboardPage() {
     Object.assign(s, Object.fromEntries(new FormData(form)))
     const el = (n: string) => form.elements.namedItem(n) as HTMLElement
     el('size').hidden = s.kind === 'story'
-    el('level').hidden = s.kind !== 'classic'
+    el('level').hidden = s.kind !== 'classic' && s.kind !== 'tarec'
+    el('minutes').hidden = s.kind !== 'tarec'
     el('story').parentElement!.hidden = s.kind !== 'story'
-    const q = s.kind === 'pvp' ? `size=${s.size}` : s.kind === 'classic' ? `size=${s.size}&level=${s.level}` : `level=${s.story}`
+    const rating = s.kind === 'race' || s.kind === 'ta', rec = s.kind === 'tarec'
+    const q = rating ? `kind=pvp&mode=${s.kind}&size=${s.size}`
+      : rec ? `kind=ta&size=${s.size}&level=${s.level}&minutes=${s.minutes}`
+      : s.kind === 'classic' ? `kind=classic&size=${s.size}&level=${s.level}` : `kind=story&level=${s.story}`
     const out = $('lb-out')
     try {
-      const rows = await api<BoardRow[]>('GET', `/leaderboard?kind=${s.kind}&${q}`)
-      out.innerHTML = rows.length ? `<table class="list"><tr><th>#</th><th>Player</th><th>${s.kind === 'pvp' ? 'Rating</th><th>W / L' : 'Time'}</th></tr>${rows.map((r, i) =>
-        `<tr><td>${i + 1}</td><td><a href="#/profile/${encodeURIComponent(r.username)}">${esc(r.username)}</a></td>${s.kind === 'pvp'
-          ? `<td>${r.value}</td><td>${r.wins} / ${r.losses}</td>` : `<td>${msTime(r.value)}</td>`}</tr>`).join('')}</table>`
+      const rows = await api<BoardRow[]>('GET', `/leaderboard?${q}`)
+      const head = rating ? 'Rating</th><th>W / L' : rec ? 'Boxes</th><th>Cells' : 'Time'
+      const cells = (r: BoardRow) => rating ? `<td>${r.value}</td><td>${r.wins} / ${r.losses}</td>`
+        : rec ? `<td>${r.value}/${s.size}</td><td>${r.cells}</td>` : `<td>${msTime(r.value)}</td>`
+      out.innerHTML = rows.length ? `<table class="list"><tr><th>#</th><th>Player</th><th>${head}</th></tr>${rows.map((r, i) =>
+        `<tr><td>${i + 1}</td><td><a href="#/profile/${encodeURIComponent(r.username)}">${esc(r.username)}</a></td>${cells(r)}</tr>`).join('')}</table>`
         : '<p class="muted">Nobody here yet.</p>'
     } catch (e) { out.innerHTML = `<p class="err">${esc((e as Error).message)}</p>` }
   }
