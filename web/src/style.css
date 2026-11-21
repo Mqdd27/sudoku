@@ -206,9 +206,20 @@ table.list th, table.list td { text-align: left; padding: .45rem .35rem; border-
 .mini { /* tiny empty board preview for the size cards, pure CSS */
   --m: 4; width: 4.5rem; aspect-ratio: 1; display: grid; grid-template: repeat(var(--m), 1fr) / repeat(var(--m), 1fr);
   border: 2px solid var(--thick); border-radius: 4px; background: var(--bg);
-  background-image: linear-gradient(var(--thin) 1px, transparent 1px), linear-gradient(90deg, var(--thin) 1px, transparent 1px);
-  background-size: calc(100% / var(--m)) calc(100% / var(--m));
+  background-image: linear-gradient(var(--thick) 2px, transparent 2px), linear-gradient(90deg, var(--thick) 2px, transparent 2px),
+    linear-gradient(var(--thin) 1px, transparent 1px), linear-gradient(90deg, var(--thin) 1px, transparent 1px);
+  background-size: 100% calc(100% * var(--br, 2) / var(--m)), calc(100% * var(--bc, 2) / var(--m)) 100%,
+    calc(100% / var(--m)) calc(100% / var(--m)), calc(100% / var(--m)) calc(100% / var(--m));
+  background-position: 0 -1px, -1px 0, 0 0, 0 0;
 }
+.sizes { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+.sizes .tile { justify-items: center; text-align: center; }
+.countdown { text-align: center; padding-top: 20vh; }
+.countdown h1 { font-size: 5rem; }
+.code { font-family: ui-monospace, monospace; font-size: 1.4rem; letter-spacing: .15em; }
+.stars { font-size: 2rem; color: #d9a400; margin: 0; text-align: center; }
+.bar-mid .opp { flex: 1; min-width: 0; }
+.bar-mid .opp b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 7rem; }
 .levels { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fill, minmax(3.5rem, 1fr)); }
 .levels a, .levels span {
   display: grid; place-items: center; min-height: 3.5rem; border-radius: 10px; text-decoration: none; font-weight: 600;
@@ -216,5 +227,6 @@ table.list th, table.list td { text-align: left; padding: .45rem .35rem; border-
 }
 .levels small { font-size: .7rem; color: #d9a400; letter-spacing: 1px; }
 .levels span { opacity: .45; }
+.levels span small { color: var(--muted); }
 .opp { display: flex; gap: .5rem; align-items: center; font-size: .9rem; }
 .opp meter { flex: 1; height: .6rem; }

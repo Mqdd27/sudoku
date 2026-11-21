@@ -97,6 +97,7 @@ export function paint() {
   const g = play.game
   const { peers } = geo(shape)
   const wrong = settings.check === 'rules' ? conflicts(g.values, shape) : new Set(g.wrong)
+  if (play.source.strict) g.wrong.forEach((i) => g.values[i] && wrong.add(i))
   const near = new Set(sel >= 0 ? peers[sel] : [])
   const sv = sel >= 0 ? g.values[sel] : 0
   const counts = new Array(shape.size + 1).fill(0)
@@ -146,7 +147,10 @@ export function setPaused(p: boolean) {
   paint()
   if (play) play.source.save(play.game, true)
 }
-export function onShow() { syncTimer() }
+export function onShow() {
+  syncTimer()
+  if (app.hidden && play) play.source.save(play.game, true)
+}
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && play?.source.pausable && !app.hidden) setPaused(true)
   else syncTimer()

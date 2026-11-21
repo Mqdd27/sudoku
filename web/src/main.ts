@@ -1,8 +1,12 @@
+import { leaderboardPage, loginPage, profilePage } from './account'
+import { api, me, whoAmI } from './api'
 import { LEVELS, SIZES, type Level, type Size } from './config'
 import { applyTheme, fmt, mount, openSettings, settings, saveSettings } from './board'
 import { newGame, type Game } from './logic/game'
 import { LocalGameSource } from './source'
 import { load, store } from './storage'
+import { pvpPage } from './pvp'
+import { storyPage } from './story'
 import { $, dialog, esc, go, offline, showGame, showPage } from './ui'
 
 type Stats = Record<string, Partial<Record<Level, { solved: number; best: number }>>>
@@ -13,8 +17,11 @@ let classic: Game | null = null
 function home() {
   const net = offline() ? ' disabled aria-disabled="true"' : ''
   const note = offline() ? '<small>Needs a connection</small>' : ''
+  const acct = offline() ? '' : me
+    ? `<a class="btn" href="#/profile">${esc(me.username)}</a>`
+    : '<a class="btn" href="#/login">Sign in</a>'
   showPage(`
-    <h1 tabindex="-1">Sudoku</h1>
+    <div class="top"><h1 tabindex="-1">Sudoku</h1>${acct}</div>
     <nav class="tiles">
       <a class="tile" href="#/classic"><b>Classic</b><small>4×4, 6×6 or 9×9, plays offline</small></a>
       <a class="tile" href="#/story"${net}><b>Story</b>${note || '<small>40 hand-picked levels</small>'}</a>
@@ -65,6 +72,7 @@ async function classicWon(g: Game) {
   const record = !s.best || g.elapsed < s.best
   if (record) s.best = g.elapsed
   store('stats', stats)
+  if (me) api('POST', '/classic/result', { size: g.size, level: g.level, ms: g.elapsed * 1000 }).catch(() => {})
   const i = await dialog('Solved! 🎉',
     `<p>${g.size}×${g.size} · <b>${esc(LEVELS[g.level])}</b><br>Time: <b>${fmt(g.elapsed)}</b>${record ? ' (new best!)' : ''}<br>Mistakes: <b>${g.mistakes}</b></p>`,
     ['New game', 'Home'])
@@ -76,6 +84,11 @@ async function classicWon(g: Game) {
 const routes: Record<string, (arg: string) => void> = {
   '': home,
   classic: classicPage,
+  story: storyPage,
+  pvp: pvpPage,
+  leaderboard: leaderboardPage,
+  login: loginPage,
+  profile: profilePage,
 }
 function route() {
   const [, name = '', arg = ''] = location.hash.split('/')
@@ -90,6 +103,8 @@ $('settings-btn').onclick = openSettings
 
 applyTheme()
 route()
+// who is signed in only changes the Home header; Classic never waits for the network
+whoAmI().then((u) => { if (u && !location.hash.replace(/^#\/?/, '')) route() })
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register('/sw.js')
 

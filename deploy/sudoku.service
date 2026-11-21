@@ -1,0 +1,35 @@
+# /etc/systemd/system/sudoku.service
+#   sudo useradd --system --home /var/lib/sudoku --shell /usr/sbin/nologin sudoku
+#   sudo install -d -o sudoku -g sudoku -m 750 /var/lib/sudoku
+#   sudo systemctl enable --now sudoku
+[Unit]
+Description=Sudoku server
+After=network.target
+
+[Service]
+User=sudoku
+Group=sudoku
+WorkingDirectory=/opt/sudoku
+EnvironmentFile=-/opt/sudoku/.env
+Environment=DB_PATH=/var/lib/sudoku/sudoku.db
+ExecStart=/opt/sudoku/sudoku-server
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=15
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sudoku
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryMax=200M
+
+[Install]
+WantedBy=multi-user.target

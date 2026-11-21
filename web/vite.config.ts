@@ -22,8 +22,17 @@ const swManifest = () => ({
   },
 })
 
+const proxy = {
+  '/api': { target: 'http://127.0.0.1:8095', changeOrigin: false },
+  '/ws': { target: 'ws://127.0.0.1:8095', ws: true, changeOrigin: false },
+}
+
 export default defineConfig({
   plugins: [swManifest()],
   worker: { format: 'es' },
   build: { target: 'es2022' },
+  // dev: the Go server runs on 127.0.0.1:8095 (see README); shared/config.json lives one level up
+  // keep the browser's Host header: the server compares it with Origin (CSRF check)
+  server: { fs: { allow: ['..'] }, proxy },
+  preview: { proxy },
 })

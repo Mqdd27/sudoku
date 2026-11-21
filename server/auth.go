@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -65,8 +66,11 @@ func verifyPassword(encoded, pw string) bool {
 func (a *App) withHashSlot(ctx context.Context, f func()) error {
 	select {
 	case a.hashSem <- struct{}{}:
-		defer func() { <-a.hashSem }()
 		f()
+		<-a.hashSem
+		if len(a.hashSem) == 0 {
+			debug.FreeOSMemory() // hand the 19 MiB back right away; logins are rare, so the GC cost is fine
+		}
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

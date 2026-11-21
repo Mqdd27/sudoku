@@ -13,6 +13,7 @@ export function showPage(html: string) {
   page.innerHTML = html
   page.hidden = false
   game.hidden = true
+  onShow()
   page.querySelector<HTMLElement>('h1')?.focus?.()
   scrollTo(0, 0)
 }

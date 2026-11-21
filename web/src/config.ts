@@ -6,6 +6,7 @@ export type Level = 'easy' | 'medium' | 'hard' | 'expert'
 export type Size = 4 | 6 | 9
 
 export const LEVELS: Record<Level, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard', expert: 'Expert' }
+export const PVP = shared.pvp
 export const SIZES: Size[] = [4, 6, 9]
 
 type SizeCfg = { boxRows: number; boxCols: number; name: string; minutes: string }

@@ -45,12 +45,16 @@ type App struct {
 func newApp(cfg Config, db *sql.DB) *App {
 	a := &App{
 		cfg: cfg, db: db, shared: shared.Load(), limiter: NewLimiter(),
-		hashSem: make(chan struct{}, 2), dummyHash: hashPassword("not a real password"),
+		hashSem: make(chan struct{}, 2), dummyHash: dummyHash,
 		story: loadStory(), now: time.Now,
 	}
 	a.hub = newHub(a)
 	return a
 }
+
+// dummyHash is verified against for unknown usernames so the response time matches a real login.
+// Precomputed (same argon2 parameters) so startup doesn't spend 19 MiB on it.
+const dummyHash = "$argon2id$v=19$m=19456,t=2,p=1$+zAwv5pRwLBHpE9O54KWGQ$IenCKL3vK138ZDcbyBs8qyho0ugWzCKmlyn40nvZRPs"
 
 func (a *App) routes() http.Handler {
 	m := http.NewServeMux()
