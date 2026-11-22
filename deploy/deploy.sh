@@ -16,7 +16,7 @@ if [ "${EMBED:-}" = 1 ]; then
   tags="-tags embedweb"
 fi
 mkdir -p build
-GOOS=linux GOARCH="$GOARCH" CGO_ENABLED=0 go build $tags -trimpath -ldflags "-s -w" -o build/sudoku-server ./server
+GOOS=linux GOARCH="$GOARCH" CGO_ENABLED=0 go build $tags -trimpath -ldflags "-s -w" -o build/sudoku-server ./server/cmd/sudoku-server
 
 rsync -az --delete web/dist/ "$HOST:$DIR/web/"
 rsync -az build/sudoku-server deploy/backup.sh "$HOST:$DIR/"

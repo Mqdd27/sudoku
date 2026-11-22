@@ -1,5 +1,5 @@
 import { leaderboardPage, loginPage, profilePage } from './account'
-import { api, hasServer, me, whoAmI } from './api'
+import { api, hasServer, me, pvpOff, whoAmI } from './api'
 import { LEVELS, SIZES, type Level, type Size } from './config'
 import { applyTheme, fmt, mount, openSettings, settings, saveSettings } from './board'
 import { newGame, type Game } from './logic/game'
@@ -30,7 +30,7 @@ function home() {
     <nav class="tiles">
       <a class="tile" href="#/classic"><b>Classic</b><small>4×4, 6×6 or 9×9, plays offline</small></a>
       <a class="tile" href="#/story"${net}><b>Story</b>${note || '<small>40 hand-picked levels</small>'}</a>
-      <a class="tile" href="#/pvp"${net}><b>PvP</b>${note || '<small>Race a friend or a stranger</small>'}</a>
+      ${pvpOff ? '' : `<a class="tile" href="#/pvp"${net}><b>PvP</b>${note || '<small>Race a friend or a stranger</small>'}</a>`}
       <a class="tile" href="#/leaderboard"${net}><b>Leaderboard</b>${note}</a>
     </nav>`)
 }
@@ -97,7 +97,8 @@ const routes: Record<string, (arg: string) => void> = {
 }
 function route() {
   const [, name = '', arg = ''] = location.hash.split('/')
-  ;((name === 'classic' || hasServer ? routes[name] : home) ?? home)(decodeURIComponent(arg))
+  const ok = name === 'classic' || (hasServer && !(pvpOff && name === 'pvp'))
+  ;((ok ? routes[name] : home) ?? home)(decodeURIComponent(arg))
 }
 addEventListener('hashchange', route)
 // connection changes only matter on menu pages (they grey out Story/PvP); never reset a running game
@@ -109,7 +110,10 @@ $('settings-btn').onclick = openSettings
 applyTheme()
 route()
 // who is signed in only changes the Home header; Classic never waits for the network
-whoAmI().then((u) => { if (!hasServer ? $('game').hidden : u && !location.hash.replace(/^#\/?/, '')) route() })
+whoAmI().then((u) => {
+  const h = location.hash.replace(/^#\/?/, '')
+  if ($('game').hidden && (!hasServer || (pvpOff && h.startsWith('pvp')) || ((u || pvpOff) && !h))) route()
+})
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register('/sw.js')
 

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -318,7 +318,26 @@ func (a *App) deleteAccount(w http.ResponseWriter, r *http.Request, u *User) {
 		return
 	}
 	a.hub.forget(u.ID) // ends any live match first, while the user row still exists for the match record
-	if _, err := a.db.Exec(`DELETE FROM users WHERE id = ?`, u.ID); err != nil {
+	// Note: explicit deletes instead of ON DELETE CASCADE, which Turso over HTTP doesn't enforce per request.
+	tx, err := a.db.Begin()
+	if err != nil {
+		a.fail(w, err)
+		return
+	}
+	defer tx.Rollback()
+	for _, q := range []string{
+		`DELETE FROM sessions WHERE user_id = ?`, `DELETE FROM classic_stats WHERE user_id = ?`,
+		`DELETE FROM story_progress WHERE user_id = ?`, `DELETE FROM story_saves WHERE user_id = ?`,
+		`DELETE FROM pvp_ratings WHERE user_id = ?`,
+		`UPDATE matches SET p1 = NULL WHERE p1 = ?`, `UPDATE matches SET p2 = NULL WHERE p2 = ?`,
+		`UPDATE matches SET winner = NULL WHERE winner = ?`, `DELETE FROM users WHERE id = ?`,
+	} {
+		if _, err := tx.Exec(q, u.ID); err != nil {
+			a.fail(w, err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
 		a.fail(w, err)
 		return
 	}

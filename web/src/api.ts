@@ -16,6 +16,7 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   } catch {
     throw new ApiError(0, 'Needs a connection. Check your network and try again.')
   }
+  if (r.headers.get('X-PvP') === '0') pvpOff = true
   if (r.status === 204) return null as T
   const j = await r.json().catch(() => ({}))
   if (!r.ok) throw new ApiError(r.status, j.error || 'Something went wrong.')
@@ -27,6 +28,8 @@ export let me: User | null = null
 export const setMe = (u: User | null) => { me = u }
 /** False on a static-only host (e.g. Vercel): there is no game server, so only Classic is offered. */
 export let hasServer = true
+/** True when the server runs without PvP (Vercel Functions can't hold live matches). */
+export let pvpOff = false
 export async function whoAmI() {
   try { me = await api<User>('GET', '/me') } catch (e) {
     const s = (e as ApiError).status

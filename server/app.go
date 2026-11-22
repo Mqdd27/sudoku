@@ -1,5 +1,6 @@
-// Command server is the Sudoku backend: accounts, Story Mode and PvP over one SQLite file.
-package main
+// Package server is the Sudoku backend: accounts, Story Mode and PvP over one SQLite (or Turso) database.
+// Main runs it as a standalone process; Handler runs the API as a Vercel Function.
+package server
 
 import (
 	"bufio"
@@ -11,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -27,6 +29,7 @@ type Config struct {
 	CookieSecure   bool
 	AllowedOrigins []string
 	TrustedProxies []netip.Prefix
+	PvP            bool     // off on hosts without long-lived connections (Vercel)
 	BindAddr       string   // 127.0.0.1 behind nginx; 0.0.0.0 inside a container (Fly.io)
 	IPHeaders      []string // headers a trusted proxy puts the client IP in
 	ServeWeb       bool
@@ -78,10 +81,18 @@ func (a *App) routes() http.Handler {
 	m.HandleFunc("POST /api/story/{n}/check", a.need(a.storyCheck))
 	m.HandleFunc("POST /api/story/{n}/hint", a.need(a.storyHint))
 	m.HandleFunc("POST /api/story/{n}/submit", a.need(a.storySubmit))
-	m.HandleFunc("GET /ws", a.hub.serveWS)
+	if a.cfg.PvP {
+		m.HandleFunc("GET /ws", a.hub.serveWS)
+	}
 	m.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { httpError(w, 404, "not found") })
 	if a.cfg.ServeWeb {
 		m.Handle("/", webHandler())
+	}
+	if !a.cfg.PvP {
+		return a.guard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-PvP", "0") // tells the web app to hide PvP
+			m.ServeHTTP(w, r)
+		}))
 	}
 	return a.guard(m)
 }
@@ -131,6 +142,10 @@ func loadConfig() (Config, error) {
 			c.AllowedOrigins = append(c.AllowedOrigins, o)
 		}
 	}
+	if u := os.Getenv("TURSO_DATABASE_URL"); u != "" { // set by the Vercel Turso integration
+		c.DBPath = u + "?authToken=" + url.QueryEscape(os.Getenv("TURSO_AUTH_TOKEN"))
+	}
+	c.PvP = env("PVP", "on") != "off"
 	c.BindAddr = env("BIND_ADDR", "127.0.0.1")
 	for _, h := range strings.Split(env("IP_HEADERS", "CF-Connecting-IP,X-Real-IP"), ",") {
 		if h = strings.TrimSpace(h); h != "" {
@@ -147,7 +162,8 @@ func loadConfig() (Config, error) {
 	return c, nil
 }
 
-func main() {
+// Main runs the server as a long-lived process (see cmd/sudoku-server).
+func Main() {
 	serveWeb := flag.Bool("web", false, "also serve the embedded web app (build with -tags embedweb)")
 	flag.Parse()
 	cfg, err := loadConfig()

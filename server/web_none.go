@@ -1,6 +1,6 @@
 //go:build !embedweb
 
-package main
+package server
 
 import "net/http"
 

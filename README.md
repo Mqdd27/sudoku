@@ -11,7 +11,7 @@ You need Node 20+ and Go 1.22+.
 
 ```sh
 # terminal 1: API + WebSocket on 127.0.0.1:8095 (local data in ./data)
-COOKIE_SECURE=false go run ./server
+COOKIE_SECURE=false go run ./server/cmd/sudoku-server
 
 # terminal 2: web app on http://localhost:5173 (proxies /api and /ws to the server)
 cd web && npm install && npm run dev
@@ -33,7 +33,7 @@ Both test suites read the same puzzle vectors in `shared/fixtures/`.
 
 ```sh
 cd web && npm run build                           # web/dist/
-go build -trimpath -ldflags "-s -w" -o sudoku-server ./server
+go build -trimpath -ldflags "-s -w" -o sudoku-server ./server/cmd/sudoku-server
 ```
 
 To serve the web app from the binary too (without nginx serving files), copy `web/dist` to `server/webdist`, build with `-tags embedweb`, and run with `-web`.
@@ -78,19 +78,6 @@ deploy/            systemd unit, nginx site, backup + deploy scripts, optional D
 
 The board never reads a solution. It asks a `GameSource` to check cells, give hints and judge a finished board. In Story and PvP the source is the server, so the client never receives the answer.
 
-## Deploying to Fly.io
-
-`fly.toml` runs everything on one Fly machine: the Go server with the web app embedded, SQLite on a 1 GB volume.
-
-```sh
-fly auth login
-fly apps create <name>            # then set app = "<name>" in fly.toml
-fly volumes create sudoku_data --region sin --size 1
-fly deploy --ha=false             # one machine: matches live in memory, SQLite is one file
-```
-
-The app is then at `https://<name>.fly.dev`. For your own domain: `fly certs add sudoku.example.com` and point the DNS record it prints at Fly.
-
 ## Deploying to a server
 
 The intended setup is Ubuntu with nginx in front, Cloudflare for DNS/TLS, and systemd running the binary.
@@ -111,4 +98,9 @@ The intended setup is Ubuntu with nginx in front, Cloudflare for DNS/TLS, and sy
 
 ### Vercel
 
-`vercel.json` still deploys `web/` on its own. Only Classic mode works that way, because Vercel can't run the Go server. For accounts, Story and PvP, serve the site from your own server as described above.
+`vercel.json` deploys the web app plus `api/index.go`, a Go Function that runs the same API on a Turso database. Accounts, Story and the leaderboard work there. PvP is hidden, because Vercel Functions can't keep live matches.
+
+1. In the Vercel project: Storage → Create → Turso, connect it to the project. This sets `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
+2. Redeploy. Tables are created on the first API request.
+
+Without a database connected, the site still runs, with Classic only.

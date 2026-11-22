@@ -1,5 +1,5 @@
 // Sign in / register, profile (stats, devices, delete), Classic stats import, leaderboard.
-import { api, ApiError, me, setMe, type User } from './api'
+import { api, ApiError, me, pvpOff, setMe, type User } from './api'
 import { fmt } from './board'
 import { LEVELS, SIZES, TA, type Level } from './config'
 import { load, store } from './storage'
@@ -90,11 +90,11 @@ export async function profilePage(name: string) {
       [`${c.size}×${c.size}`, esc(LEVELS[c.level] ?? c.level), String(c.solved), msTime(c.bestMs)]))}</table>` : '<p class="muted">No games yet.</p>'}
     <h2>Story</h2>
     <p>${p.story.completed} / ${p.story.total} levels · ${p.story.stars} ★</p>
-    <h2>PvP</h2>
+    ${pvpOff ? '' : `<h2>PvP</h2>
     ${p.pvp.length ? `<table class="list"><tr><th>Mode</th><th>Board</th><th>Rating</th><th>W / L / D</th></tr>${rows(p.pvp.map((r) =>
       [r.mode === 'ta' ? 'Time Attack' : 'Race', `${r.size}×${r.size}`, String(r.rating), `${r.wins} / ${r.losses} / ${r.draws}`]))}</table>` : '<p class="muted">No matches yet.</p>'}
     ${p.timeAttack.wins + p.timeAttack.losses + p.timeAttack.draws ? `<p>Time Attack: ${p.timeAttack.wins} won, ${p.timeAttack.losses} lost, ${p.timeAttack.draws} drawn ·
-      best ${p.timeAttack.bestBoxes} boxes · average ${p.timeAttack.avgBoxes.toFixed(1)} boxes</p>` : ''}
+      best ${p.timeAttack.bestBoxes} boxes · average ${p.timeAttack.avgBoxes.toFixed(1)} boxes</p>` : ''}`}
     ${own ? `
       <h2>Devices</h2><div id="devices" class="muted">Loading…</div>
       <div class="row"><button id="logout">Sign out</button><button id="others">Sign out other devices</button><button id="delete">Delete account</button></div>` : ''}`)
@@ -132,11 +132,11 @@ export async function profilePage(name: string) {
 interface BoardRow { username: string; value: number; wins?: number; losses?: number; cells?: number }
 
 export function leaderboardPage() {
-  const s = { kind: 'race', size: '9', level: 'easy', story: '1', minutes: '3' }
+  const s = { kind: pvpOff ? 'classic' : 'race', size: '9', level: 'easy', story: '1', minutes: '3' }
   showPage(`
     <div class="top">${back()}<h1 tabindex="-1">Leaderboard</h1></div>
     <form class="row" id="lb">
-      <select name="kind" aria-label="Mode"><option value="race">Race rating</option><option value="ta">Time Attack rating</option><option value="tarec">Time Attack records</option><option value="classic">Classic best time</option><option value="story">Story best time</option></select>
+      <select name="kind" aria-label="Mode">${pvpOff ? '' : '<option value="race">Race rating</option><option value="ta">Time Attack rating</option><option value="tarec">Time Attack records</option>'}<option value="classic">Classic best time</option><option value="story">Story best time</option></select>
       <select name="size" aria-label="Board size">${SIZES.map((n) => `<option value="${n}"${n === 9 ? ' selected' : ''}>${n}×${n}</option>`).join('')}</select>
       <select name="level" aria-label="Level">${Object.entries(LEVELS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
       <select name="minutes" aria-label="Duration">${[...new Set(Object.values(TA.minutes).flat())].sort((a, b) => a - b).map((n) => `<option value="${n}"${n === 3 ? ' selected' : ''}>${n} min</option>`).join('')}</select>

@@ -14,7 +14,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /src/web/dist server/webdist
-RUN CGO_ENABLED=0 go build -tags embedweb -trimpath -ldflags "-s -w" -o /sudoku-server ./server
+RUN CGO_ENABLED=0 go build -tags embedweb -trimpath -ldflags "-s -w" -o /sudoku-server ./server/cmd/sudoku-server
 
 FROM scratch
 COPY --from=go /sudoku-server /sudoku-server

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bytes"
@@ -20,7 +20,7 @@ func newTestApp(t *testing.T) (*App, *httptest.Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{TrustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}, IPHeaders: []string{"CF-Connecting-IP", "X-Real-IP"}}
+	cfg := Config{PvP: true, TrustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}, IPHeaders: []string{"CF-Connecting-IP", "X-Real-IP"}}
 	a := newApp(cfg, db)
 	srv := httptest.NewServer(a.routes())
 	t.Cleanup(func() { a.hub.shutdown(); srv.Close(); db.Close() })

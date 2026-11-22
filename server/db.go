@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"database/sql"
@@ -11,7 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	_ "modernc.org/sqlite" // pure Go SQLite driver, no CGO
+	_ "github.com/tursodatabase/libsql-client-go/libsql" // Turso over HTTP (Vercel)
+	_ "modernc.org/sqlite"                               // pure Go SQLite driver, no CGO
 )
 
 //go:embed migrations/*.sql
@@ -19,6 +20,15 @@ var migrations embed.FS
 
 // openDB opens (or creates) the SQLite file in WAL mode with foreign keys on, then applies migrations.
 func openDB(path string) (*sql.DB, error) {
+	if strings.HasPrefix(path, "libsql://") || strings.HasPrefix(path, "https://") {
+		db, err := sql.Open("libsql", path)
+		if err == nil {
+			if err = migrate(db); err != nil {
+				db.Close()
+			}
+		}
+		return db, err
+	}
 	if path != ":memory:" {
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			return nil, err
